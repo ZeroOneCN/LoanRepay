@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate, Currency } from '../types';
 import {
   initDatabase,
   getAllDebts,
@@ -37,6 +37,7 @@ interface AppState {
   accounts: InvestAccount[];
   pnlRecords: PnlRecord[];
   fxRates: FxRate[];
+  displayCurrency: Currency;
 }
 
 interface AppContextType extends AppState {
@@ -66,7 +67,9 @@ interface AppContextType extends AppState {
   deletePnl: (id: string) => Promise<void>;
   saveFxRate: (r: Omit<FxRate, 'id' | 'updatedAt'> & { id?: string }) => Promise<void>;
   deleteFxRate: (id: string) => Promise<void>;
+  setDisplayCurrency: (cur: Currency) => void;
   convertToCNY: (amount: number, from: FxRate['from']) => number;
+  convertCurrency: (amount: number, from: Currency, to: Currency) => number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -90,6 +93,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pnlRecords, setPnlRecords] = useState<PnlRecord[]>([]);
   const [accounts, setAccounts] = useState<InvestAccount[]>([]);
   const [fxRates, setFxRates] = useState<FxRate[]>([]);
+  // 投资记账页面显示币种（默认 CNY，持久化到 localStorage）
+  const [displayCurrency, setDisplayCurrencyState] = useState<Currency>(() => {
+    try {
+      const saved = localStorage.getItem('displayCurrency');
+      return (saved as Currency) || 'CNY';
+    } catch { return 'CNY'; }
+  });
 
   const recordTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
     const fullTx: Transaction = {
@@ -410,11 +420,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { await dbDeleteFxRate(id); } catch (e) { console.error('Failed to delete fx rate:', e); }
   };
 
+  const setDisplayCurrency = (cur: Currency) => {
+    setDisplayCurrencyState(cur);
+    try { localStorage.setItem('displayCurrency', cur); } catch {}
+  };
+
   const convertToCNY = (amount: number, from: FxRate['from']): number => {
     if (from === 'CNY') return amount;
     const rate = fxRates.find(r => r.from === from)?.rate;
-    if (!rate) return amount; // 无汇率则返回原值（CNY 口径下不准确，由调用方提示）
+    if (!rate) return amount; // 无汇率则返回原值，由调用方提示
     return amount * rate;
+  };
+
+  // 任意币种间转换：先统一转 CNY，再除以目标币种汇率
+  const convertCurrency = (amount: number, from: Currency, to: Currency): number => {
+    if (from === to) return amount;
+    const inCNY = convertToCNY(amount, from); // to CNY
+    if (to === 'CNY') return inCNY;
+    const toRate = fxRates.find(r => r.from === to)?.rate;
+    if (!toRate || toRate <= 0) return inCNY; // 目标币种无汇率，返回 CNY 口径
+    return inCNY / toRate;
   };
 
   const totalDebt = debts.reduce((sum, d) => sum + d.remainingAmount, 0);
@@ -434,6 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       accounts,
       pnlRecords,
       fxRates,
+      displayCurrency,
       addDebt,
       updateDebt,
       deleteDebt,
@@ -459,7 +485,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deletePnl,
       saveFxRate,
       deleteFxRate,
-      convertToCNY
+      setDisplayCurrency,
+      convertToCNY,
+      convertCurrency
     }}>
       {children}
     </AppContext.Provider>

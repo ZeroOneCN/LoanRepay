@@ -20,8 +20,14 @@ interface PnlFormValues {
   note?: string;
 }
 
+const CURRENCY_SYMBOL: Record<string, string> = {
+  CNY: '¥', USD: '$', HKD: 'HK$', USDT: '₮'
+};
+
 export default function PnlRecords() {
-  const { pnlRecords, platforms, accounts, addPnl, updatePnl, deletePnl, convertToCNY, fxRates } = useApp();
+  const { pnlRecords, platforms, accounts, addPnl, updatePnl, deletePnl, convertCurrency, convertToCNY, fxRates, displayCurrency } = useApp();
+  const DC = displayCurrency;
+  const dSym = CURRENCY_SYMBOL[DC] || '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<string>('all');
@@ -183,15 +189,17 @@ export default function PnlRecords() {
       sorter: (a: any, b: any) => a.pnl - b.pnl,
     },
     {
-      title: '折算 CNY',
-      key: 'pnlCNY',
-      width: 140,
+      title: `折算 ${DC}`,
+      key: 'pnlDisplay',
+      width: 150,
       render: (_: any, r: any) => {
-        const cny = convertToCNY(r.pnl, r.currency);
-        const noRate = r.currency !== 'CNY' && !fxRates.find(fr => fr.from === r.currency);
+        const val = convertCurrency(r.pnl, r.currency, DC);
+        // 缺失汇率：源币种非 CNY 且无汇率，或目标币种非 CNY 且无目标汇率
+        const noRate = (r.currency !== 'CNY' && !fxRates.find(fr => fr.from === r.currency))
+          || (DC !== 'CNY' && !fxRates.find(fr => fr.from === DC));
         return (
-          <span style={{ color: cny >= 0 ? COLORS.success : COLORS.danger, fontSize: FONT.tableCell }}>
-            {cny >= 0 ? '+' : ''}¥{formatMoney(cny)}
+          <span style={{ color: val >= 0 ? COLORS.success : COLORS.danger, fontSize: FONT.tableCell }}>
+            {val >= 0 ? '+' : ''}{dSym}{formatMoney(val)} {DC}
             {noRate && <span style={{ color: COLORS.warning, marginLeft: 4, fontSize: FONT.caption }}>无汇率</span>}
           </span>
         );
