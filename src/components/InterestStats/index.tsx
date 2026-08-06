@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
-import { Row, Col, Table, Tag, Space, Select } from 'antd';
-import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import { Row, Col, Table, Tag, Space, Button, Modal, Form, InputNumber, Select, Input, message } from 'antd';
+import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
@@ -14,37 +14,89 @@ import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
 
+interface InterestFormValues {
+  debt_id: string;
+  amount: number;
+  note?: string;
+}
+
 const txTypeColor: Record<string, string> = {
   create: 'blue',
   repay: 'green',
   adjust: 'orange',
   delete: 'red',
+  interest: 'purple',
 };
 
 export default function InterestStats() {
-  const { transactions } = useApp();
+  const { transactions, debts, recordTransaction } = useApp();
+  const [interestModalOpen, setInterestModalOpen] = useState(false);
+  const [interestForm] = Form.useForm<InterestFormValues>();
+
+  const handleOpenInterestModal = () => {
+    if (debts.length === 0) {
+      message.warning('请先在债务管理中添加债务');
+      return;
+    }
+    interestForm.resetFields();
+    interestForm.setFieldsValue({ debt_id: debts[0]?.id, amount: 0 });
+    setInterestModalOpen(true);
+  };
+
+  const handleInterestSubmit = async () => {
+    try {
+      const values = await interestForm.validateFields();
+      const debt = debts.find(d => d.id === values.debt_id);
+      if (!debt) { message.error('未找到对应债务'); return; }
+      if (!values.amount || values.amount <= 0) { message.warning('请输入有效利息金额'); return; }
+      await recordTransaction({
+        debt_id: debt.id,
+        debt_name: debt.name,
+        type: 'interest',
+        amount: values.amount,
+        interest_portion: values.amount,
+        principal_portion: 0,
+        remaining_after: debt.remainingAmount,
+        interest_rate: debt.interestRate,
+        note: values.note ? `未支付利息录入：${values.note}` : '未支付利息录入'
+      });
+      message.success(`已为「${debt.name}」录入未支付利息 ¥${formatMoney(values.amount)}`);
+      setInterestModalOpen(false);
+    } catch (e) {
+      // 校验失败时静默处理
+    }
+  };
 
   const stats = useMemo(() => {
     const repayTx = transactions.filter(t => t.type === 'repay');
-    const totalInterest = repayTx.reduce((sum, t) => sum + t.interest_portion, 0);
+    const interestTx = transactions.filter(t => t.type === 'interest');
+    const totalInterest = repayTx.reduce((sum, t) => sum + t.interest_portion, 0) + interestTx.reduce((sum, t) => sum + t.amount, 0);
     const totalPrincipal = repayTx.reduce((sum, t) => sum + t.principal_portion, 0);
-    const totalRepaid = totalInterest + totalPrincipal;
+    const totalRepaid = repayTx.reduce((sum, t) => sum + t.interest_portion + t.principal_portion, 0);
 
     const now = dayjs();
-    const thisMonth = repayTx.filter(t => dayjs(t.created_at).isSame(now, 'month'));
-    const monthInterest = thisMonth.reduce((sum, t) => sum + t.interest_portion, 0);
-    const monthRepaid = thisMonth.reduce((sum, t) => sum + t.interest_portion + t.principal_portion, 0);
+    const thisMonthRepay = repayTx.filter(t => dayjs(t.created_at).isSame(now, 'month'));
+    const thisMonthInterest = interestTx.filter(t => dayjs(t.created_at).isSame(now, 'month'));
+    const monthInterest = thisMonthRepay.reduce((sum, t) => sum + t.interest_portion, 0) + thisMonthInterest.reduce((sum, t) => sum + t.amount, 0);
+    const monthRepaid = thisMonthRepay.reduce((sum, t) => sum + t.interest_portion + t.principal_portion, 0);
 
-    return { totalInterest, totalPrincipal, totalRepaid, monthInterest, monthRepaid };
+    // 未支付利息总额
+    const unpaidInterest = interestTx.reduce((sum, t) => sum + t.amount, 0);
+
+    return { totalInterest, totalPrincipal, totalRepaid, monthInterest, monthRepaid, unpaidInterest };
   }, [transactions]);
 
   const trendChartOption = useMemo(() => {
     const monthlyMap = new Map<string, { interest: number; principal: number }>();
-    transactions.filter(t => t.type === 'repay').forEach(t => {
+    transactions.filter(t => t.type === 'repay' || t.type === 'interest').forEach(t => {
       const month = dayjs(t.created_at).format('YYYY-MM');
       const existing = monthlyMap.get(month) || { interest: 0, principal: 0 };
-      existing.interest += t.interest_portion;
-      existing.principal += t.principal_portion;
+      if (t.type === 'interest') {
+        existing.interest += t.amount;
+      } else {
+        existing.interest += t.interest_portion;
+        existing.principal += t.principal_portion;
+      }
       monthlyMap.set(month, existing);
     });
 
@@ -71,10 +123,14 @@ export default function InterestStats() {
 
   const debtInterestMap = useMemo(() => {
     const map = new Map<string, { name: string; interest: number; principal: number }>();
-    transactions.filter(t => t.type === 'repay').forEach(t => {
+    transactions.filter(t => t.type === 'repay' || t.type === 'interest').forEach(t => {
       const existing = map.get(t.debt_id) || { name: t.debt_name, interest: 0, principal: 0 };
-      existing.interest += t.interest_portion;
-      existing.principal += t.principal_portion;
+      if (t.type === 'interest') {
+        existing.interest += t.amount;
+      } else {
+        existing.interest += t.interest_portion;
+        existing.principal += t.principal_portion;
+      }
       map.set(t.debt_id, existing);
     });
     return Array.from(map.values()).sort((a, b) => b.interest - a.interest);
@@ -160,23 +216,36 @@ export default function InterestStats() {
     },
   ];
 
-  if (transactions.length === 0) {
-    return (
-      <div>
-        <PageHeader title="利息统计" subtitle="还款利息分析与交易记录" />
-        <EmptyState description="暂无交易记录，还款或新增债务后将自动记录" />
-      </div>
-    );
-  }
+  const showEmpty = transactions.length === 0 && debts.length === 0;
 
   return (
     <div>
-      <PageHeader title="利息统计" subtitle="还款利息分析与交易记录" />
+      <PageHeader
+        title="利息统计"
+        subtitle="还款利息分析与交易记录"
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleOpenInterestModal}
+            disabled={debts.length === 0}
+          >
+            录入未支付利息
+          </Button>
+        }
+      />
 
+      {showEmpty ? (
+        <EmptyState description="暂无交易记录，还款或新增债务后将自动记录" />
+      ) : (
+        <>
       {/* 统计卡片 */}
       <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
         <Col xs={24} sm={12} md={6}>
           <StatisticCard title="累计利息支出" value={stats.totalInterest} precision={2} prefix={<RiseOutlined />} suffix="元" color={COLORS.warning} />
+        </Col>
+        <Col xs={24} sm={12} md={6}>
+          <StatisticCard title="未支付利息" value={stats.unpaidInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} />
         </Col>
         <Col xs={24} sm={12} md={6}>
           <StatisticCard title="累计还款本金" value={stats.totalPrincipal} precision={2} prefix={<FallOutlined />} suffix="元" color={COLORS.success} />
@@ -185,7 +254,7 @@ export default function InterestStats() {
           <StatisticCard title="累计还款总额" value={stats.totalRepaid} precision={2} prefix={<TransactionOutlined />} suffix="元" color={COLORS.primary} />
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="本月利息" value={stats.monthInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} />
+          <StatisticCard title="本月利息" value={stats.monthInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.warning} />
         </Col>
       </Row>
 
@@ -222,6 +291,47 @@ export default function InterestStats() {
           size="middle"
         />
       </SectionCard>
+        </>
+      )}
+
+      {/* 录入未支付利息 Modal */}
+      <Modal
+        title="录入未支付利息"
+        open={interestModalOpen}
+        onOk={handleInterestSubmit}
+        onCancel={() => setInterestModalOpen(false)}
+        okText="确认录入"
+        cancelText="取消"
+        width={460}
+        maskClosable={false}
+      >
+        <Form form={interestForm} layout="vertical">
+          <Form.Item
+            name="debt_id"
+            label="选择债务"
+            rules={[{ required: true, message: '请选择债务' }]}
+          >
+            <Select placeholder="请选择债务" showSearch optionFilterProp="children">
+              {debts.map(d => (
+                <Option key={d.id} value={d.id}>
+                  {d.name}（剩余 ¥{formatMoney(d.remainingAmount)}）
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item
+            name="amount"
+            label="未支付利息金额（元）"
+            rules={[{ required: true, message: '请输入利息金额' }]}
+            tooltip="录入所有账单加起来累计的未支付利息，将计入利息统计"
+          >
+            <InputNumber style={{ width: '100%' }} min={0.01} step={0.01} placeholder="如：500" />
+          </Form.Item>
+          <Form.Item name="note" label="备注">
+            <Input.TextArea rows={2} placeholder="可选，如：X月账单利息" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 }

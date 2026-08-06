@@ -130,13 +130,14 @@ export const RESTRUCTURE_TYPE_LABELS: Record<RestructureType, string> = {
 
 // ==================== 交易记录 ====================
 
-export type TransactionType = 'create' | 'repay' | 'adjust' | 'delete';
+export type TransactionType = 'create' | 'repay' | 'adjust' | 'delete' | 'interest';
 
 export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
   create: '新增债务',
   repay: '还款',
   adjust: '编辑调整',
-  delete: '删除债务'
+  delete: '删除债务',
+  interest: '利息录入'
 };
 
 export interface Transaction {

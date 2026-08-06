@@ -35,6 +35,8 @@ interface AppContextType extends AppState {
   addDebt: (debt: Omit<Debt, 'id' | 'createdAt'>) => Promise<void>;
   updateDebt: (id: string, debt: Partial<Debt>) => Promise<void>;
   deleteDebt: (id: string) => Promise<void>;
+  repayDebt: (id: string, amount: number, interestPortion: number) => Promise<void>;
+  recordTransaction: (tx: Omit<Transaction, 'id' | 'created_at'>) => Promise<void>;
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt'>) => Promise<void>;
   updateAsset: (id: string, asset: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
@@ -201,6 +203,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const repayDebt = async (id: string, amount: number, interestPortion: number) => {
+    const debt = debts.find(d => d.id === id);
+    if (!debt) return;
+    const principalPortion = amount - interestPortion;
+    const newRemaining = debt.remainingAmount - principalPortion;
+    setDebts(prev => prev.map(d => d.id === id ? { ...d, remainingAmount: newRemaining } : d));
+    try {
+      await dbUpdateDebt(id, { remainingAmount: newRemaining });
+      await recordTransaction({
+        debt_id: id,
+        debt_name: debt.name,
+        type: 'repay',
+        amount,
+        interest_portion: interestPortion,
+        principal_portion: principalPortion,
+        remaining_after: newRemaining,
+        interest_rate: debt.interestRate,
+        note: `还款（利息¥${interestPortion.toFixed(2)} + 本金¥${principalPortion.toFixed(2)}）`
+      });
+    } catch (e) {
+      console.error('Failed to repay debt:', e);
+    }
+  };
+
   const addAsset = async (asset: Omit<Asset, 'id' | 'createdAt'>) => {
     const newAsset: Asset = {
       ...asset,
@@ -281,6 +307,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addDebt,
       updateDebt,
       deleteDebt,
+      repayDebt,
+      recordTransaction,
       addAsset,
       updateAsset,
       deleteAsset,

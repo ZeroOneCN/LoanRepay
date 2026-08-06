@@ -33,14 +33,15 @@ interface DebtFormValues {
 }
 
 export default function DebtManager() {
-  const { debts, addDebt, updateDebt, deleteDebt, totalDebt } = useApp();
+  const { debts, addDebt, updateDebt, deleteDebt, repayDebt, totalDebt } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
-  const [repayModal, setRepayModal] = useState<{ visible: boolean; debtId: string; debtName: string; remaining: number }>({ visible: false, debtId: '', debtName: '', remaining: 0 });
+  const [repayModal, setRepayModal] = useState<{ visible: boolean; debtId: string; debtName: string; remaining: number; interestRate?: number }>({ visible: false, debtId: '', debtName: '', remaining: 0 });
   const [repayAmount, setRepayAmount] = useState<number>(0);
+  const [repayInterest, setRepayInterest] = useState<number>(0);
   const [form] = Form.useForm<DebtFormValues>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const screens = useBreakpoint();
@@ -161,15 +162,21 @@ export default function DebtManager() {
   };
 
   const handleRepay = (record: any) => {
-    setRepayModal({ visible: true, debtId: record.id, debtName: record.name, remaining: record.remainingAmount });
+    const suggestedInterest = record.interestRate
+      ? Math.min(calculateMonthlyInterest(record.remainingAmount, record.interestRate), record.remainingAmount)
+      : 0;
+    setRepayModal({ visible: true, debtId: record.id, debtName: record.name, remaining: record.remainingAmount, interestRate: record.interestRate });
     setRepayAmount(0);
+    setRepayInterest(Math.round(suggestedInterest * 100) / 100);
   };
 
   const handleRepaySubmit = async () => {
     if (repayAmount <= 0) { message.warning('请输入有效还款金额'); return; }
     if (repayAmount > repayModal.remaining) { message.warning('还款金额不能超过剩余金额'); return; }
-    const newRemaining = repayModal.remaining - repayAmount;
-    await updateDebt(repayModal.debtId, { remainingAmount: newRemaining });
+    if (repayInterest > repayAmount) { message.warning('利息部分不能超过还款总额'); return; }
+    const principalPortion = repayAmount - repayInterest;
+    const newRemaining = repayModal.remaining - principalPortion;
+    await repayDebt(repayModal.debtId, repayAmount, repayInterest);
     if (newRemaining === 0) {
       message.success(`「${repayModal.debtName}」已还清`);
     } else {
@@ -523,7 +530,7 @@ export default function DebtManager() {
         onCancel={() => setRepayModal({ ...repayModal, visible: false })}
         okText="确认还款"
         cancelText="取消"
-        width={440}
+        width={460}
         maskClosable={false}
       >
         <div style={{ marginBottom: SPACING.lg }}>
@@ -543,7 +550,19 @@ export default function DebtManager() {
               max={repayModal.remaining}
               value={repayAmount}
               onChange={(v) => setRepayAmount(v ?? 0)}
-              placeholder="输入还款金额"
+              placeholder="输入还款总额"
+            />
+          </Form.Item>
+          <Form.Item label={
+            <span>其中利息部分（元）</span>
+          } tooltip="输入本次还款中利息部分，系统会自动建议月利息金额，可手动修改">
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={repayAmount}
+              value={repayInterest}
+              onChange={(v) => setRepayInterest(v ?? 0)}
+              placeholder="利息金额"
             />
           </Form.Item>
           <Space>
@@ -553,8 +572,19 @@ export default function DebtManager() {
           </Space>
           {repayAmount > 0 && (
             <div style={{ marginTop: SPACING.md, padding: SPACING.md, background: COLORS.bgPrimaryLight, borderRadius: 6, fontSize: FONT.bodySmall }}>
-              还款后剩余：<strong style={{ color: COLORS.primary, fontSize: FONT.body }}>¥{formatMoney(repayModal.remaining - repayAmount)}</strong>
-              {repayModal.remaining - repayAmount === 0 && <span style={{ marginLeft: SPACING.sm, color: COLORS.success, fontWeight: 500 }}>（已还清）</span>}
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>利息部分：</span>
+                <span style={{ color: COLORS.warning, fontWeight: 500 }}>¥{formatMoney(repayInterest)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span>本金部分：</span>
+                <span style={{ color: COLORS.success, fontWeight: 500 }}>¥{formatMoney(repayAmount - repayInterest)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4, borderTop: `1px solid ${COLORS.border}` }}>
+                <span>还款后剩余：</span>
+                <strong style={{ color: COLORS.primary, fontSize: FONT.body }}>¥{formatMoney(repayModal.remaining - (repayAmount - repayInterest))}</strong>
+              </div>
+              {repayModal.remaining - (repayAmount - repayInterest) === 0 && <span style={{ marginLeft: SPACING.sm, color: COLORS.success, fontWeight: 500 }}>（已还清）</span>}
             </div>
           )}
         </Form>
