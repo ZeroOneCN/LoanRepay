@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, PnlRecord, FxRate } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate } from '../types';
 import {
   initDatabase,
   getAllDebts,
@@ -19,6 +19,7 @@ import {
   getAllTransactions,
   addTransaction as dbAddTransaction,
   getAllPlatforms, addPlatform as dbAddPlatform, updatePlatform as dbUpdatePlatform, deletePlatform as dbDeletePlatform,
+  getAllAccounts, addAccount as dbAddAccount, updateAccount as dbUpdateAccount, deleteAccount as dbDeleteAccount,
   getAllPnl, addPnl as dbAddPnl, updatePnl as dbUpdatePnl, deletePnl as dbDeletePnl,
   getAllFxRates, saveFxRate as dbSaveFxRate, deleteFxRate as dbDeleteFxRate,
 } from '../services/database';
@@ -33,6 +34,7 @@ interface AppState {
   targetDate: string;
   dbReady: boolean;
   platforms: InvestPlatform[];
+  accounts: InvestAccount[];
   pnlRecords: PnlRecord[];
   fxRates: FxRate[];
 }
@@ -56,6 +58,9 @@ interface AppContextType extends AppState {
   addPlatform: (p: Omit<InvestPlatform, 'id' | 'createdAt'>) => Promise<void>;
   updatePlatform: (id: string, updates: Partial<InvestPlatform>) => Promise<void>;
   deletePlatform: (id: string) => Promise<void>;
+  addAccount: (a: Omit<InvestAccount, 'id' | 'createdAt'>) => Promise<void>;
+  updateAccount: (id: string, updates: Partial<InvestAccount>) => Promise<void>;
+  deleteAccount: (id: string) => Promise<void>;
   addPnl: (p: Omit<PnlRecord, 'id' | 'createdAt'>) => Promise<void>;
   updatePnl: (id: string, updates: Partial<PnlRecord>) => Promise<void>;
   deletePnl: (id: string) => Promise<void>;
@@ -83,6 +88,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dbReady, setDbReady] = useState(false);
   const [platforms, setPlatforms] = useState<InvestPlatform[]>([]);
   const [pnlRecords, setPnlRecords] = useState<PnlRecord[]>([]);
+  const [accounts, setAccounts] = useState<InvestAccount[]>([]);
   const [fxRates, setFxRates] = useState<FxRate[]>([]);
 
   const recordTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
@@ -103,7 +109,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadData = async () => {
       try {
         await initDatabase();
-        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx, loadedPlatforms, loadedPnl, loadedRates] = await Promise.all([
+        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx, loadedPlatforms, loadedAccounts, loadedPnl, loadedRates] = await Promise.all([
           getAllDebts(),
           getAllAssets(),
           getIncomeConfig(),
@@ -111,6 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           getTargetDate(),
           getAllTransactions(),
           getAllPlatforms(),
+          getAllAccounts(),
           getAllPnl(),
           getAllFxRates()
         ]);
@@ -121,6 +128,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setTargetDateState(loadedTargetDate);
         setTransactions(loadedTx);
         setPlatforms(loadedPlatforms);
+        setAccounts(loadedAccounts);
         setPnlRecords(loadedPnl);
         setFxRates(loadedRates);
         setDbReady(true);
@@ -335,8 +343,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deletePlatform = async (id: string) => {
     setPlatforms(prev => prev.filter(p => p.id !== id));
+    setAccounts(prev => prev.filter(a => a.platformId !== id));
     setPnlRecords(prev => prev.filter(r => r.platformId !== id));
     try { await dbDeletePlatform(id); } catch (e) { console.error('Failed to delete platform:', e); }
+  };
+
+  const addAccount = async (a: Omit<InvestAccount, 'id' | 'createdAt'>) => {
+    const newAccount: InvestAccount = {
+      ...a,
+      id: `acc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString()
+    };
+    setAccounts(prev => [newAccount, ...prev]);
+    try { await dbAddAccount(newAccount); } catch (e) { console.error('Failed to add account:', e); }
+  };
+
+  const updateAccount = async (id: string, updates: Partial<InvestAccount>) => {
+    setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+    try { await dbUpdateAccount(id, updates); } catch (e) { console.error('Failed to update account:', e); }
+  };
+
+  const deleteAccount = async (id: string) => {
+    setAccounts(prev => prev.filter(a => a.id !== id));
+    setPnlRecords(prev => prev.filter(r => r.accountId !== id));
+    try { await dbDeleteAccount(id); } catch (e) { console.error('Failed to delete account:', e); }
   };
 
   const addPnl = async (p: Omit<PnlRecord, 'id' | 'createdAt'>) => {
@@ -401,6 +431,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       targetDate,
       dbReady,
       platforms,
+      accounts,
       pnlRecords,
       fxRates,
       addDebt,
@@ -420,6 +451,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPlatform,
       updatePlatform,
       deletePlatform,
+      addAccount,
+      updateAccount,
+      deleteAccount,
       addPnl,
       updatePnl,
       deletePnl,

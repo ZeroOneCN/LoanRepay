@@ -252,10 +252,23 @@ db.exec(`
 `);
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS invest_accounts (
+    id TEXT PRIMARY KEY,
+    platformId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    productType TEXT,
+    note TEXT,
+    createdAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS invest_pnl (
     id TEXT PRIMARY KEY,
     platformId TEXT NOT NULL,
-    symbol TEXT NOT NULL,
+    accountId TEXT,
+    symbol TEXT,
     currency TEXT NOT NULL,
     pnl REAL NOT NULL,
     recordedAt TEXT NOT NULL,
@@ -263,6 +276,9 @@ db.exec(`
     createdAt TEXT NOT NULL
   )
 `);
+
+// 迁移老表结构（如果 invest_pnl 是老版本创建的）
+addColumnIfNotExists('invest_pnl', 'accountId', 'TEXT');
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS fx_rates (
@@ -305,7 +321,50 @@ app.put('/api/invest/platforms/:id', (req, res) => {
 app.delete('/api/invest/platforms/:id', (req, res) => {
   try {
     db.prepare('DELETE FROM invest_platforms WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM invest_accounts WHERE platformId = ?').run(req.params.id);
     db.prepare('DELETE FROM invest_pnl WHERE platformId = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 账户
+app.get('/api/invest/accounts', (req, res) => {
+  try {
+    const { platformId } = req.query;
+    let sql = 'SELECT * FROM invest_accounts';
+    const params = [];
+    if (platformId) { sql += ' WHERE platformId = ?'; params.push(platformId); }
+    sql += ' ORDER BY createdAt DESC';
+    const rows = db.prepare(sql).all(...params);
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/invest/accounts', (req, res) => {
+  try {
+    const { id, platformId, name, currency, productType, note, createdAt } = req.body;
+    db.prepare('INSERT INTO invest_accounts (id, platformId, name, currency, productType, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(id, platformId, name, currency, productType || null, note || null, createdAt);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/invest/accounts/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    if (fields.length === 0) return res.json({ success: true });
+    const setClause = fields.map(k => `${k} = ?`).join(', ');
+    const values = fields.map(k => req.body[k]);
+    db.prepare(`UPDATE invest_accounts SET ${setClause} WHERE id = ?`).run(...values, id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/invest/accounts/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM invest_accounts WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM invest_pnl WHERE accountId = ?').run(req.params.id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -320,9 +379,9 @@ app.get('/api/invest/pnl', (req, res) => {
 
 app.post('/api/invest/pnl', (req, res) => {
   try {
-    const { id, platformId, symbol, currency, pnl, recordedAt, note, createdAt } = req.body;
-    db.prepare('INSERT INTO invest_pnl (id, platformId, symbol, currency, pnl, recordedAt, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(id, platformId, symbol, currency, pnl, recordedAt, note || null, createdAt);
+    const { id, platformId, accountId, symbol, currency, pnl, recordedAt, note, createdAt } = req.body;
+    db.prepare('INSERT INTO invest_pnl (id, platformId, accountId, symbol, currency, pnl, recordedAt, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, platformId, accountId || null, symbol || null, currency, pnl, recordedAt, note || null, createdAt);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

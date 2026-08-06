@@ -1,4 +1,4 @@
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, PnlRecord, FxRate } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate } from '../types';
 
 const API_BASE = '/api';
 
@@ -182,6 +182,26 @@ export async function updatePlatform(id: string, updates: Partial<InvestPlatform
 
 export async function deletePlatform(id: string): Promise<void> {
   await fetchApi(`${API_BASE}/invest/platforms/${id}`, { method: 'DELETE' });
+}
+
+export async function getAllAccounts(): Promise<InvestAccount[]> {
+  return fetchApi(`${API_BASE}/invest/accounts`);
+}
+
+export async function addAccount(a: InvestAccount): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/accounts`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(a)
+  });
+}
+
+export async function updateAccount(id: string, updates: Partial<InvestAccount>): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/accounts/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates)
+  });
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/accounts/${id}`, { method: 'DELETE' });
 }
 
 export async function getAllPnl(): Promise<PnlRecord[]> {

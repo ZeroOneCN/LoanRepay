@@ -175,26 +175,46 @@ export const CURRENCY_LABELS: Record<Currency, string> = {
   USDT: '泰达币 USDT',
 };
 
+/** 加密平台的产品类型（合约/现货） */
+export type ProductType = 'spot' | 'futures';
+
+export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
+  spot: '现货',
+  futures: '合约',
+};
+
 /** 投资平台 */
 export interface InvestPlatform {
   id: string;
   name: string;
   market: InvestMarket;
-  currency: Currency;
+  currency: Currency;    // 平台默认币种（账户会继承或覆盖）
   createdAt: string;
   note?: string;
 }
 
-/** 盈亏快照记录：某平台某品种的累计历史总盈亏 */
-export interface PnlRecord {
+/** 平台下的子账户（如币安的现货账户、合约账户，或不同券商账户） */
+export interface InvestAccount {
   id: string;
   platformId: string;
-  symbol: string;        // 品种/标的，如 BTC、AAPL、00700
-  currency: Currency;     // 记录币种（默认继承平台币种，可单独覆盖）
-  pnl: number;            // 累计盈亏金额（负数为亏损）
-  recordedAt: string;     // 记录时间（用户填写的快照时间点）
+  name: string;
+  currency: Currency;            // 账户记账币种（默认继承平台）
+  productType?: ProductType;      // 仅 crypto 平台用：合约/现货
   note?: string;
-  createdAt: string;       // 系统创建时间
+  createdAt: string;
+}
+
+/** 盈亏快照记录：某账户的累计历史总盈亏（品种可空） */
+export interface PnlRecord {
+  id: string;
+  platformId: string;           // 冗余：方便按平台聚合
+  accountId: string;             // 关联账户
+  symbol?: string;               // 品种/标的，可选（如 BTC、AAPL、00700），账户级记录可以不填
+  currency: Currency;            // 记录币种（默认继承账户）
+  pnl: number;                   // 累计盈亏金额（负数为亏损）
+  recordedAt: string;            // 记录时间（用户填写的快照时间点）
+  note?: string;
+  createdAt: string;             // 系统创建时间
 }
 
 /** 全局汇率：target 固定为 CNY */

@@ -1,19 +1,19 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Popconfirm, Tag, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
-import { Currency, CURRENCY_LABELS } from '../../types';
+import { Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
-import { COLORS, FONT } from '../../styles/theme';
+import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
 
 interface PnlFormValues {
-  platformId: string;
-  symbol: string;
+  accountId: string;
+  symbol?: string;
   currency: Currency;
   pnl: number;
   recordedAt: dayjs.Dayjs;
@@ -21,31 +21,47 @@ interface PnlFormValues {
 }
 
 export default function PnlRecords() {
-  const { pnlRecords, platforms, addPnl, updatePnl, deletePnl, convertToCNY, fxRates } = useApp();
+  const { pnlRecords, platforms, accounts, addPnl, updatePnl, deletePnl, convertToCNY, fxRates } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [form] = Form.useForm<PnlFormValues>();
 
+  // 表单中选中的账户
+  const selectedAccountId = Form.useWatch('accountId', form);
+  const selectedAccount = useMemo(
+    () => accounts.find(a => a.id === selectedAccountId),
+    [accounts, selectedAccountId]
+  );
+  const pfOfSelectedAccount = useMemo(
+    () => (selectedAccount ? platforms.find(p => p.id === selectedAccount.platformId) : null),
+    [platforms, selectedAccount]
+  );
+
+  // 表单打开时，默认平台过滤器
   const openAdd = () => {
-    if (platforms.length === 0) {
-      message.warning('请先到「平台管理」添加平台');
-      return;
-    }
+    if (platforms.length === 0) { message.warning('请先到「平台管理」添加平台'); return; }
+    if (accounts.length === 0) { message.warning('请先到「平台管理」添加账户'); return; }
     setEditingId(null);
     form.resetFields();
-    form.setFieldsValue({
-      platformId: platforms[0]?.id,
-      currency: platforms[0]?.currency || 'USD',
-      recordedAt: dayjs(),
-      pnl: 0,
-    });
+    const defaultAccountFilter = platformFilter !== 'all' ? platformFilter : platforms[0]?.id;
+    const firstAccount = accounts.find(a => defaultAccountFilter && a.platformId === defaultAccountFilter) || accounts[0];
+    if (firstAccount) {
+      const pf = platforms.find(p => p.id === firstAccount.platformId);
+      form.setFieldsValue({
+        accountId: firstAccount.id,
+        currency: firstAccount.currency || pf?.currency || 'CNY',
+        recordedAt: dayjs(),
+        pnl: 0,
+      });
+    }
     setModalOpen(true);
   };
 
   const openEdit = (record: any) => {
     setEditingId(record.id);
     form.setFieldsValue({
-      platformId: record.platformId,
+      accountId: record.accountId,
       symbol: record.symbol,
       currency: record.currency,
       pnl: record.pnl,
@@ -58,10 +74,13 @@ export default function PnlRecords() {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
-      if (!values.symbol?.trim()) { message.warning('请输入品种/标的'); return; }
+      if (!values.accountId) { message.warning('请选择账户'); return; }
+      const acc = accounts.find(a => a.id === values.accountId);
+      if (!acc) { message.warning('账户无效'); return; }
       const data = {
-        platformId: values.platformId,
-        symbol: values.symbol.trim().toUpperCase(),
+        platformId: acc.platformId,
+        accountId: acc.id,
+        symbol: values.symbol?.trim() ? values.symbol.trim().toUpperCase() : undefined,
         currency: values.currency,
         pnl: values.pnl,
         recordedAt: values.recordedAt.format('YYYY-MM-DD HH:mm'),
@@ -85,11 +104,24 @@ export default function PnlRecords() {
     message.success('删除成功');
   };
 
-  // 选中平台变化时，自动同步币种
-  const onPlatformChange = (pid: string) => {
-    const pf = platforms.find(p => p.id === pid);
-    if (pf) form.setFieldValue('currency', pf.currency);
+  // 切换账户时自动同步币种（加密货币还可以看合约/现货展示）
+  const onAccountChange = (accId: string) => {
+    const acc = accounts.find(a => a.id === accId);
+    if (acc) form.setFieldValue('currency', acc.currency);
   };
+
+  const filteredRecords = useMemo(() => {
+    if (platformFilter === 'all') return pnlRecords;
+    // 按平台过滤：找到属于该平台的所有账户的 pnl 记录
+    const accIds = new Set(accounts.filter(a => a.platformId === platformFilter).map(a => a.id));
+    return pnlRecords.filter(r => accIds.has(r.accountId) || r.platformId === platformFilter);
+  }, [pnlRecords, accounts, platformFilter]);
+
+  const accountOptionsForSelectedPlatform = useMemo(() => {
+    if (!modalOpen) return accounts; // modal 内才会用到
+    // 如果 form 打开了还没选平台，默认所有可用账户
+    return accounts;
+  }, [accounts, modalOpen]);
 
   const columns = [
     {
@@ -102,12 +134,26 @@ export default function PnlRecords() {
       defaultSortOrder: 'descend' as const,
     },
     {
-      title: '平台',
-      key: 'platform',
-      ellipsis: true,
+      title: '账户',
+      key: 'account',
       render: (_: any, r: any) => {
-        const pf = platforms.find(p => p.id === r.platformId);
-        return <span style={{ fontWeight: 500, fontSize: FONT.tableCell }}>{pf?.name || '未知'}</span>;
+        const acc = accounts.find(a => a.id === r.accountId);
+        const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
+        return (
+          <div>
+            <div style={{ fontWeight: 500, fontSize: FONT.tableCell }}>
+              {acc?.name || '未知账户'}
+              {acc?.productType && (
+                <Tag color={acc.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 4, marginRight: 0 }}>
+                  {PRODUCT_TYPE_LABELS[acc.productType as ProductType]}
+                </Tag>
+              )}
+            </div>
+            <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginTop: 2 }}>
+              {pf?.name || '未知平台'}
+            </div>
+          </div>
+        );
       }
     },
     {
@@ -115,7 +161,7 @@ export default function PnlRecords() {
       dataIndex: 'symbol',
       key: 'symbol',
       width: 100,
-      render: (text: string) => <Tag color="blue">{text}</Tag>
+      render: (text: string) => text ? <Tag color="blue">{text}</Tag> : <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>账户级</span>
     },
     {
       title: '币种',
@@ -173,17 +219,37 @@ export default function PnlRecords() {
     }
   ];
 
+  const canAdd = platforms.length > 0 && accounts.length > 0;
+
   return (
     <SectionCard
-      title={`盈亏记录（共 ${pnlRecords.length} 条）`}
-      extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={platforms.length === 0}>添加盈亏</Button>}
+      title={`盈亏记录（共 ${filteredRecords.length} 条）`}
+      extra={(
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {platforms.length > 0 && (
+            <Select value={platformFilter} onChange={setPlatformFilter} style={{ width: 160 }}>
+              <Option value="all">全部平台</Option>
+              {platforms.map(p => <Option key={p.id} value={p.id}>{p.name}</Option>)}
+            </Select>
+          )}
+          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd} disabled={!canAdd}>添加盈亏</Button>
+        </div>
+      )}
     >
       {pnlRecords.length === 0 ? (
-        <EmptyState description={platforms.length === 0 ? '请先到「平台管理」添加平台' : '暂无盈亏记录，点击「添加盈亏」开始录入'} actionText={platforms.length === 0 ? undefined : '添加盈亏'} onAction={platforms.length === 0 ? undefined : openAdd} />
+        <EmptyState
+          description={
+            platforms.length === 0 ? '请先到「平台管理」添加平台和账户'
+              : accounts.length === 0 ? '请先到「平台管理-账户管理」添加账户'
+                : '暂无盈亏记录，点击「添加盈亏」开始录入'
+          }
+          actionText={canAdd ? '添加盈亏' : undefined}
+          onAction={canAdd ? openAdd : undefined}
+        />
       ) : (
         <Table
           columns={columns}
-          dataSource={pnlRecords}
+          dataSource={filteredRecords}
           rowKey="id"
           pagination={{ defaultPageSize: 15, showSizeChanger: true, pageSizeOptions: ['15', '30', '50'], showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条` }}
           size="middle"
@@ -199,15 +265,49 @@ export default function PnlRecords() {
         cancelText="取消"
         width={520}
         maskClosable={false}
+        destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item name="platformId" label="平台" rules={[{ required: true, message: '请选择平台' }]}>
-            <Select placeholder="选择平台" onChange={onPlatformChange} optionFilterProp="children" showSearch>
-              {platforms.map(p => <Option key={p.id} value={p.id}>{p.name}</Option>)}
+          <Form.Item name="accountId" label="账户" rules={[{ required: true, message: '请选择账户' }]}>
+            <Select
+              placeholder="请先选择账户"
+              onChange={onAccountChange}
+              optionFilterProp="children"
+              showSearch
+              filterOption={(input, option: any) => {
+                const label = option?.label || '';
+                return typeof label === 'string' && label.toLowerCase().includes(input.toLowerCase());
+              }}
+            >
+              {accountOptionsForSelectedPlatform.map(a => {
+                const pf = platforms.find(p => p.id === a.platformId);
+                const label = `${pf?.name || ''} / ${a.name}${a.productType ? `（${PRODUCT_TYPE_LABELS[a.productType]}）` : ''}`;
+                return (
+                  <Option key={a.id} value={a.id} label={label}>
+                    <div>
+                      <span style={{ fontWeight: 500 }}>{a.name}</span>
+                      <span style={{ color: COLORS.textTertiary, marginLeft: 4, fontSize: FONT.caption }}>{pf?.name}</span>
+                      {a.productType && (
+                        <Tag color={a.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 8 }}>
+                          {PRODUCT_TYPE_LABELS[a.productType]}
+                        </Tag>
+                      )}
+                    </div>
+                  </Option>
+                );
+              })}
             </Select>
           </Form.Item>
-          <Form.Item name="symbol" label="品种/标的" rules={[{ required: true, message: '请输入品种' }]} tooltip="如 BTC、AAPL、00700">
-            <Input placeholder="如 BTC、AAPL、00700" />
+          {pfOfSelectedAccount && (
+            <div style={{ marginTop: -SPACING.sm, marginBottom: SPACING.md, fontSize: FONT.caption, color: COLORS.textSecondary }}>
+              所属平台：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{pfOfSelectedAccount.name}</span>
+              {' · '}
+              {selectedAccount?.productType && <>类型：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{PRODUCT_TYPE_LABELS[selectedAccount.productType]}</span>{' · '}</>}
+              币种：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{selectedAccount?.currency || pfOfSelectedAccount.currency}</span>
+            </div>
+          )}
+          <Form.Item name="symbol" label="品种/标的（可选）" tooltip="账户级记录可以不填品种。如 BTC、AAPL、00700，选填">
+            <Input placeholder="如 BTC、AAPL、00700（账户级可留空）" />
           </Form.Item>
           <Form.Item name="currency" label="币种" rules={[{ required: true, message: '请选择币种' }]}>
             <Select>

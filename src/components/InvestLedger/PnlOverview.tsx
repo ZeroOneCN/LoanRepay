@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
-import { Row, Col, Button, Empty } from 'antd';
+import { Row, Col, Button, Empty, Tag } from 'antd';
 import { RiseOutlined, FallOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useApp } from '../../context/AppContext';
-import { INVEST_MARKET_LABELS, InvestMarket, Currency } from '../../types';
+import { INVEST_MARKET_LABELS, InvestMarket, Currency, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
 import StatisticCard from '../Common/StatisticCard';
 import SectionCard from '../Common/SectionCard';
@@ -11,44 +11,59 @@ import EmptyState from '../Common/EmptyState';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => void }) {
-  const { pnlRecords, platforms, fxRates, convertToCNY } = useApp();
+  const { pnlRecords, platforms, accounts, fxRates, convertToCNY } = useApp();
 
   const stats = useMemo(() => {
-    // 各币种原值
     const byCurrency: Record<Currency, number> = { CNY: 0, USD: 0, HKD: 0, USDT: 0 };
     pnlRecords.forEach(r => { byCurrency[r.currency] += r.pnl; });
-
-    // 折算 CNY
     const totalCNY = pnlRecords.reduce((sum, r) => sum + convertToCNY(r.pnl, r.currency), 0);
     const profitCNY = pnlRecords.filter(r => r.pnl > 0).reduce((sum, r) => sum + convertToCNY(r.pnl, r.currency), 0);
     const lossCNY = pnlRecords.filter(r => r.pnl < 0).reduce((sum, r) => sum + convertToCNY(r.pnl, r.currency), 0);
-
     return { byCurrency, totalCNY, profitCNY, lossCNY };
   }, [pnlRecords, fxRates]);
 
-  // 按平台汇总（CNY 口径）
+  // 按账户汇总（CNY 口径），同时包含所属平台
+  const byAccount = useMemo(() => {
+    const map = new Map<string, { name: string; platformName: string; market: InvestMarket; productType?: ProductType; pnlCNY: number; recordCount: number }>();
+    pnlRecords.forEach(r => {
+      const acc = accounts.find(a => a.id === r.accountId);
+      const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
+      const key = acc?.id || r.platformId || 'unknown';
+      const accName = acc?.name || (pf ? `${pf.name}（旧数据）` : '未知账户');
+      const existing = map.get(key) || { name: accName, platformName: pf?.name || '未知', market: (pf?.market || 'other') as InvestMarket, productType: acc?.productType, pnlCNY: 0, recordCount: 0 };
+      existing.pnlCNY += convertToCNY(r.pnl, r.currency);
+      existing.recordCount += 1;
+      map.set(key, existing);
+    });
+    return Array.from(map.values()).sort((a, b) => b.pnlCNY - a.pnlCNY);
+  }, [pnlRecords, platforms, accounts, fxRates]);
+
+  // 按平台汇总
   const byPlatform = useMemo(() => {
     const map = new Map<string, { name: string; pnlCNY: number }>();
     pnlRecords.forEach(r => {
-      const pf = platforms.find(p => p.id === r.platformId);
+      const acc = accounts.find(a => a.id === r.accountId);
+      const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
+      const pid = pf?.id || r.platformId || 'unknown';
       const name = pf?.name || '未知平台';
-      const existing = map.get(r.platformId) || { name, pnlCNY: 0 };
+      const existing = map.get(pid) || { name, pnlCNY: 0 };
       existing.pnlCNY += convertToCNY(r.pnl, r.currency);
-      map.set(r.platformId, existing);
+      map.set(pid, existing);
     });
     return Array.from(map.values()).sort((a, b) => b.pnlCNY - a.pnlCNY);
-  }, [pnlRecords, platforms, fxRates]);
+  }, [pnlRecords, platforms, accounts, fxRates]);
 
-  // 按市场汇总（CNY 口径）
+  // 按市场汇总
   const byMarket = useMemo(() => {
     const map = new Map<InvestMarket, number>();
     pnlRecords.forEach(r => {
-      const pf = platforms.find(p => p.id === r.platformId);
+      const acc = accounts.find(a => a.id === r.accountId);
+      const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
       const market = (pf?.market || 'other') as InvestMarket;
       map.set(market, (map.get(market) || 0) + convertToCNY(r.pnl, r.currency));
     });
     return Array.from(map.entries()).map(([market, value]) => ({ market, value }));
-  }, [pnlRecords, platforms, fxRates]);
+  }, [pnlRecords, platforms, accounts, fxRates]);
 
   const marketPieOption = useMemo(() => {
     if (byMarket.length === 0) return {};
@@ -99,14 +114,13 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
   if (pnlRecords.length === 0) {
     return (
       <EmptyState
-        description="暂无盈亏记录，请先在「平台管理」添加平台，再到「盈亏记录」录入数据"
+        description="暂无盈亏记录，请先在「平台管理」添加平台和账户，再到「盈亏记录」录入数据"
         actionText="去录入盈亏"
         onAction={onGotoRecords}
       />
     );
   }
 
-  // 缺失汇率提示
   const missingRates = (Object.keys(stats.byCurrency) as Currency[]).filter(
     c => c !== 'CNY' && stats.byCurrency[c] !== 0 && !fxRates.find(r => r.from === c)
   );
@@ -159,10 +173,52 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
         </Col>
       </Row>
 
+      {/* 按账户明细 */}
       <SectionCard
-        title="各币种原值明细"
+        title="各账户明细（CNY 折算）"
         extra={<Button type="primary" icon={<PlusOutlined />} onClick={onGotoRecords}>录入盈亏</Button>}
+        style={{ marginBottom: SPACING.lg }}
       >
+        {byAccount.length > 0 ? (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+            gap: SPACING.lg
+          }}>
+            {byAccount.map(a => (
+              <div key={a.name + a.platformName} style={{
+                padding: SPACING.lg, borderRadius: 8,
+                border: `1px solid ${COLORS.border}`,
+                background: COLORS.bgLight
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm }}>
+                  <div style={{ fontWeight: 500, fontSize: FONT.h3 }}>{a.name}</div>
+                  <Tag style={{ fontSize: FONT.caption }}>{INVEST_MARKET_LABELS[a.market]}</Tag>
+                </div>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginBottom: SPACING.md }}>
+                  {a.platformName}
+                  {a.productType && (
+                    <Tag color={a.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 6 }}>
+                      {PRODUCT_TYPE_LABELS[a.productType]}
+                    </Tag>
+                  )}
+                  <span style={{ marginLeft: 6 }}>· {a.recordCount} 条记录</span>
+                </div>
+                <div style={{
+                  fontSize: FONT.h2, fontWeight: 600,
+                  color: a.pnlCNY >= 0 ? COLORS.success : COLORS.danger
+                }}>
+                  {a.pnlCNY >= 0 ? '+' : ''}¥{formatMoney(a.pnlCNY)}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Empty description="暂无账户数据" />
+        )}
+      </SectionCard>
+
+      <SectionCard title="各币种原值明细">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.lg }}>
           {(Object.keys(stats.byCurrency) as Currency[]).map(c => (
             <div key={c} style={{ minWidth: 140, padding: SPACING.md, background: COLORS.bgLight, borderRadius: 6 }}>
