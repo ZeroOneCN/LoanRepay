@@ -201,6 +201,18 @@ export default function DebtManager() {
     return result.sort((a, b) => b.remainingAmount - a.remainingAmount);
   }, [debts, searchText, filterType]);
 
+  // 筛选后的汇总
+  const filteredSummary = useMemo(() => {
+    const sum = filteredDebts.reduce((acc, d) => {
+      acc.amount += d.remainingAmount;
+      acc.credit += d.creditLimit || 0;
+      return acc;
+    }, { amount: 0, credit: 0 });
+    return { ...sum, available: sum.credit - sum.amount, count: filteredDebts.length };
+  }, [filteredDebts]);
+
+  const isFiltering = searchText.trim() !== '' || filterType !== 'all';
+
   const debtTypes = useMemo(() => {
     const types = new Set(debts.map(d => d.type));
     return Array.from(types);
@@ -271,6 +283,14 @@ export default function DebtManager() {
       }
     },
     {
+      title: '备注',
+      dataIndex: 'note',
+      key: 'note',
+      width: 160,
+      ellipsis: true,
+      render: (val: string) => val ? <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{val}</span> : <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>
+    },
+    {
       title: '操作',
       key: 'action',
       width: 160,
@@ -325,7 +345,7 @@ export default function DebtManager() {
 
       {/* 搜索 + 筛选 */}
       {debts.length > 0 && (
-        <Row gutter={SPACING.sm} style={{ marginBottom: SPACING.lg }}>
+        <Row gutter={SPACING.sm} style={{ marginBottom: SPACING.sm }}>
           <Col xs={24} sm={12} md={8}>
             <AntInput
               prefix={<SearchOutlined style={{ color: COLORS.textTertiary }} />}
@@ -346,6 +366,41 @@ export default function DebtManager() {
             </Select>
           </Col>
         </Row>
+      )}
+
+      {/* 筛选后的汇总条 */}
+      {debts.length > 0 && (
+        <div style={{
+          marginBottom: SPACING.lg,
+          padding: `${SPACING.md}px ${SPACING.lg}px`,
+          background: COLORS.bgLight,
+          borderRadius: 6,
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: SPACING.lg,
+          alignItems: 'center',
+          fontSize: FONT.bodySmall,
+        }}>
+          <span style={{ color: COLORS.textSecondary }}>
+            {isFiltering ? `筛选结果：${filteredSummary.count} 条` : `共 ${debts.length} 条债务`}
+          </span>
+          <span style={{ color: COLORS.textSecondary }}>
+            剩余金额：<span style={{ color: COLORS.danger, fontWeight: 500 }}>¥{formatMoney(filteredSummary.amount)}</span>
+          </span>
+          {filteredSummary.credit > 0 && (
+            <>
+              <span style={{ color: COLORS.textSecondary }}>
+                总额度：<span style={{ color: COLORS.textPrimary, fontWeight: 500 }}>¥{formatMoney(filteredSummary.credit)}</span>
+              </span>
+              <span style={{ color: COLORS.textSecondary }}>
+                可用额度：<span style={{ color: COLORS.success, fontWeight: 500 }}>¥{formatMoney(Math.max(0, filteredSummary.available))}</span>
+              </span>
+            </>
+          )}
+          {isFiltering && (
+            <Button type="link" size="small" onClick={() => { setSearchText(''); setFilterType('all'); }} style={{ padding: 0, marginLeft: 'auto' }}>清除筛选</Button>
+          )}
+        </div>
       )}
 
       {debts.length === 0 ? (
