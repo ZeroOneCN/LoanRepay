@@ -70,17 +70,17 @@ export default function InterestStats() {
   const stats = useMemo(() => {
     const repayTx = transactions.filter(t => t.type === 'repay');
     const interestTx = transactions.filter(t => t.type === 'interest');
-    const totalInterest = repayTx.reduce((sum, t) => sum + t.interest_portion, 0) + interestTx.reduce((sum, t) => sum + t.amount, 0);
+    // 累计利息支出：只统计已还款中的利息部分（未支付利息已包含在欠款余额中，不重复计算）
+    const totalInterest = repayTx.reduce((sum, t) => sum + t.interest_portion, 0);
     const totalPrincipal = repayTx.reduce((sum, t) => sum + t.principal_portion, 0);
     const totalRepaid = repayTx.reduce((sum, t) => sum + t.interest_portion + t.principal_portion, 0);
 
     const now = dayjs();
     const thisMonthRepay = repayTx.filter(t => dayjs(t.created_at).isSame(now, 'month'));
-    const thisMonthInterest = interestTx.filter(t => dayjs(t.created_at).isSame(now, 'month'));
-    const monthInterest = thisMonthRepay.reduce((sum, t) => sum + t.interest_portion, 0) + thisMonthInterest.reduce((sum, t) => sum + t.amount, 0);
+    const monthInterest = thisMonthRepay.reduce((sum, t) => sum + t.interest_portion, 0);
     const monthRepaid = thisMonthRepay.reduce((sum, t) => sum + t.interest_portion + t.principal_portion, 0);
 
-    // 未支付利息总额
+    // 未支付利息总额（已包含在欠款余额中，仅作参考）
     const unpaidInterest = interestTx.reduce((sum, t) => sum + t.amount, 0);
 
     return { totalInterest, totalPrincipal, totalRepaid, monthInterest, monthRepaid, unpaidInterest };
@@ -88,15 +88,11 @@ export default function InterestStats() {
 
   const trendChartOption = useMemo(() => {
     const monthlyMap = new Map<string, { interest: number; principal: number }>();
-    transactions.filter(t => t.type === 'repay' || t.type === 'interest').forEach(t => {
+    transactions.filter(t => t.type === 'repay').forEach(t => {
       const month = dayjs(t.created_at).format('YYYY-MM');
       const existing = monthlyMap.get(month) || { interest: 0, principal: 0 };
-      if (t.type === 'interest') {
-        existing.interest += t.amount;
-      } else {
-        existing.interest += t.interest_portion;
-        existing.principal += t.principal_portion;
-      }
+      existing.interest += t.interest_portion;
+      existing.principal += t.principal_portion;
       monthlyMap.set(month, existing);
     });
 
@@ -123,14 +119,10 @@ export default function InterestStats() {
 
   const debtInterestMap = useMemo(() => {
     const map = new Map<string, { name: string; interest: number; principal: number }>();
-    transactions.filter(t => t.type === 'repay' || t.type === 'interest').forEach(t => {
+    transactions.filter(t => t.type === 'repay').forEach(t => {
       const existing = map.get(t.debt_id) || { name: t.debt_name, interest: 0, principal: 0 };
-      if (t.type === 'interest') {
-        existing.interest += t.amount;
-      } else {
-        existing.interest += t.interest_portion;
-        existing.principal += t.principal_portion;
-      }
+      existing.interest += t.interest_portion;
+      existing.principal += t.principal_portion;
       map.set(t.debt_id, existing);
     });
     return Array.from(map.values()).sort((a, b) => b.interest - a.interest);
@@ -245,7 +237,7 @@ export default function InterestStats() {
           <StatisticCard title="累计利息支出" value={stats.totalInterest} precision={2} prefix={<RiseOutlined />} suffix="元" color={COLORS.warning} />
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="未支付利息" value={stats.unpaidInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} />
+          <StatisticCard title="未支付利息（已含在欠款中）" value={stats.unpaidInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} />
         </Col>
         <Col xs={24} sm={12} md={6}>
           <StatisticCard title="累计还款本金" value={stats.totalPrincipal} precision={2} prefix={<FallOutlined />} suffix="元" color={COLORS.success} />
