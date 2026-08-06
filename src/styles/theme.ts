@@ -33,6 +33,11 @@ export const COLORS = {
   border: '#f0f0f0',
   bgPage: '#f5f5f5',
   bgCard: '#ffffff',
+  bgLight: '#fafafa',
+  bgPrimaryLight: '#e6f4ff',
+  bgSuccessLight: '#f6ffed',
+  bgWarningLight: '#fffbe6',
+  bgDangerLight: '#fff2f0',
   // 语义色快捷引用
   green: '#52c41a',
   red: '#ff4d4f',
@@ -102,7 +107,19 @@ export const COMMON_STYLES = {
     color: COLORS.primary,
     fontWeight: FONT_WEIGHT.medium,
   } as React.CSSProperties,
-  /** 数值格式化：带颜色和千分位格式 */
+  /** 扁平化信息条 */
+  infoBar: {
+    padding: SPACING.md,
+    background: COLORS.bgLight,
+    borderRadius: RADIUS.md,
+  } as React.CSSProperties,
+  /** 扁平化指标行 */
+  metricRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: `${SPACING.sm}px 0`,
+  } as React.CSSProperties,
   formatMoney: (val: number, color?: string): React.CSSProperties => ({
     color: color || COLORS.textPrimary,
     fontWeight: FONT_WEIGHT.medium,

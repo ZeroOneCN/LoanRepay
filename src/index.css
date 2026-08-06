@@ -20,3 +20,43 @@ body {
 .ant-layout {
   height: 100%;
 }
+
+/* 扁平化：去除 Card 默认阴影 */
+.ant-card {
+  box-shadow: none !important;
+}
+
+/* 扁平化：表格行 hover 用浅色 */
+.ant-table-tbody > tr:hover > td {
+  background: #fafafa !important;
+}
+
+/* 扁平化：进度条无圆角 */
+.ant-progress-inner {
+  border-radius: 0 !important;
+}
+.ant-progress-bg {
+  border-radius: 0 !important;
+}
+
+/* 扁平化：Tag 无圆角 */
+.ant-tag {
+  border-radius: 4px;
+  border: none;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}

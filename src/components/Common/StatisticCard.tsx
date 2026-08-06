@@ -1,5 +1,5 @@
 import { Card, Statistic } from 'antd';
-import { RADIUS, SPACING } from '../../styles/theme';
+import { COLORS, RADIUS, SPACING, FONT, FONT_WEIGHT } from '../../styles/theme';
 
 interface StatisticCardProps {
   title: string;
@@ -28,15 +28,16 @@ export default function StatisticCard({
       styles={{
         body: {
           padding: SPACING.lg,
-          transition: 'box-shadow 0.2s, transform 0.2s',
         },
       }}
       style={{
         borderRadius: RADIUS.lg,
-        border: '1px solid #f0f0f0',
+        border: 'none',
+        background: COLORS.bgLight,
         height: '100%',
+        transition: 'background 0.2s',
       }}
-      hoverable
+      hoverable={false}
     >
       <Statistic
         title={title}
@@ -45,9 +46,9 @@ export default function StatisticCard({
         prefix={prefix}
         suffix={suffix}
         valueStyle={{
-          fontSize: 24,
-          fontWeight: 700,
-          color: color || '#1a1a1a',
+          fontSize: FONT.statistic,
+          fontWeight: FONT_WEIGHT.bold,
+          color: color || COLORS.textPrimary,
           ...valueStyle,
         }}
         formatter={formatter as any}
