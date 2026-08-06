@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, PnlRecord, FxRate } from '../types';
 import {
   initDatabase,
   getAllDebts,
@@ -18,6 +18,9 @@ import {
   saveTargetDate,
   getAllTransactions,
   addTransaction as dbAddTransaction,
+  getAllPlatforms, addPlatform as dbAddPlatform, updatePlatform as dbUpdatePlatform, deletePlatform as dbDeletePlatform,
+  getAllPnl, addPnl as dbAddPnl, updatePnl as dbUpdatePnl, deletePnl as dbDeletePnl,
+  getAllFxRates, saveFxRate as dbSaveFxRate, deleteFxRate as dbDeleteFxRate,
 } from '../services/database';
 import { calculateMonthlyInterest } from '../utils/repaymentEngine';
 
@@ -29,6 +32,9 @@ interface AppState {
   strategy: RepaymentStrategy;
   targetDate: string;
   dbReady: boolean;
+  platforms: InvestPlatform[];
+  pnlRecords: PnlRecord[];
+  fxRates: FxRate[];
 }
 
 interface AppContextType extends AppState {
@@ -46,6 +52,16 @@ interface AppContextType extends AppState {
   totalDebt: number;
   totalAsset: number;
   netWorth: number;
+  // 投资记账
+  addPlatform: (p: Omit<InvestPlatform, 'id' | 'createdAt'>) => Promise<void>;
+  updatePlatform: (id: string, updates: Partial<InvestPlatform>) => Promise<void>;
+  deletePlatform: (id: string) => Promise<void>;
+  addPnl: (p: Omit<PnlRecord, 'id' | 'createdAt'>) => Promise<void>;
+  updatePnl: (id: string, updates: Partial<PnlRecord>) => Promise<void>;
+  deletePnl: (id: string) => Promise<void>;
+  saveFxRate: (r: Omit<FxRate, 'id' | 'updatedAt'> & { id?: string }) => Promise<void>;
+  deleteFxRate: (id: string) => Promise<void>;
+  convertToCNY: (amount: number, from: FxRate['from']) => number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -65,6 +81,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [strategy, setStrategyState] = useState<RepaymentStrategy>('avalanche');
   const [targetDate, setTargetDateState] = useState<string>('');
   const [dbReady, setDbReady] = useState(false);
+  const [platforms, setPlatforms] = useState<InvestPlatform[]>([]);
+  const [pnlRecords, setPnlRecords] = useState<PnlRecord[]>([]);
+  const [fxRates, setFxRates] = useState<FxRate[]>([]);
 
   const recordTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
     const fullTx: Transaction = {
@@ -84,13 +103,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadData = async () => {
       try {
         await initDatabase();
-        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx] = await Promise.all([
+        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx, loadedPlatforms, loadedPnl, loadedRates] = await Promise.all([
           getAllDebts(),
           getAllAssets(),
           getIncomeConfig(),
           getStrategy(),
           getTargetDate(),
-          getAllTransactions()
+          getAllTransactions(),
+          getAllPlatforms(),
+          getAllPnl(),
+          getAllFxRates()
         ]);
         setDebts(loadedDebts);
         setAssets(loadedAssets);
@@ -98,6 +120,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setStrategyState(loadedStrategy);
         setTargetDateState(loadedTargetDate);
         setTransactions(loadedTx);
+        setPlatforms(loadedPlatforms);
+        setPnlRecords(loadedPnl);
+        setFxRates(loadedRates);
         setDbReady(true);
       } catch (e) {
         console.error('Failed to load data from SQLite:', e);
@@ -291,6 +316,77 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // ==================== 投资记账方法 ====================
+
+  const addPlatform = async (p: Omit<InvestPlatform, 'id' | 'createdAt'>) => {
+    const newPlatform: InvestPlatform = {
+      ...p,
+      id: `pf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString()
+    };
+    setPlatforms(prev => [newPlatform, ...prev]);
+    try { await dbAddPlatform(newPlatform); } catch (e) { console.error('Failed to add platform:', e); }
+  };
+
+  const updatePlatform = async (id: string, updates: Partial<InvestPlatform>) => {
+    setPlatforms(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    try { await dbUpdatePlatform(id, updates); } catch (e) { console.error('Failed to update platform:', e); }
+  };
+
+  const deletePlatform = async (id: string) => {
+    setPlatforms(prev => prev.filter(p => p.id !== id));
+    setPnlRecords(prev => prev.filter(r => r.platformId !== id));
+    try { await dbDeletePlatform(id); } catch (e) { console.error('Failed to delete platform:', e); }
+  };
+
+  const addPnl = async (p: Omit<PnlRecord, 'id' | 'createdAt'>) => {
+    const newPnl: PnlRecord = {
+      ...p,
+      id: `pnl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: new Date().toISOString()
+    };
+    setPnlRecords(prev => [newPnl, ...prev]);
+    try { await dbAddPnl(newPnl); } catch (e) { console.error('Failed to add pnl:', e); }
+  };
+
+  const updatePnl = async (id: string, updates: Partial<PnlRecord>) => {
+    setPnlRecords(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    try { await dbUpdatePnl(id, updates); } catch (e) { console.error('Failed to update pnl:', e); }
+  };
+
+  const deletePnl = async (id: string) => {
+    setPnlRecords(prev => prev.filter(p => p.id !== id));
+    try { await dbDeletePnl(id); } catch (e) { console.error('Failed to delete pnl:', e); }
+  };
+
+  const saveFxRate = async (r: Omit<FxRate, 'id' | 'updatedAt'> & { id?: string }) => {
+    const existing = fxRates.find(x => x.from === r.from);
+    const id = r.id || existing?.id || `fx_${r.from}`;
+    const newRate: FxRate = {
+      id,
+      from: r.from,
+      rate: r.rate,
+      updatedAt: new Date().toISOString()
+    };
+    setFxRates(prev => {
+      const others = prev.filter(x => x.from !== r.from);
+      return [...others, newRate];
+    });
+    try { await dbSaveFxRate(newRate); } catch (e) { console.error('Failed to save fx rate:', e); }
+  };
+
+  const deleteFxRate = async (id: string) => {
+    setFxRates(prev => prev.filter(r => r.id !== id));
+    try { await dbDeleteFxRate(id); } catch (e) { console.error('Failed to delete fx rate:', e); }
+  };
+
+  const convertToCNY = (amount: number, from: FxRate['from']): number => {
+    if (from === 'CNY') return amount;
+    const rate = fxRates.find(r => r.from === from)?.rate;
+    if (!rate) return amount; // 无汇率则返回原值（CNY 口径下不准确，由调用方提示）
+    return amount * rate;
+  };
+
   const totalDebt = debts.reduce((sum, d) => sum + d.remainingAmount, 0);
   const totalAsset = assets.reduce((sum, a) => sum + a.amount, 0);
   const netWorth = totalAsset - totalDebt;
@@ -304,6 +400,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       strategy,
       targetDate,
       dbReady,
+      platforms,
+      pnlRecords,
+      fxRates,
       addDebt,
       updateDebt,
       deleteDebt,
@@ -317,7 +416,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTargetDate,
       totalDebt,
       totalAsset,
-      netWorth
+      netWorth,
+      addPlatform,
+      updatePlatform,
+      deletePlatform,
+      addPnl,
+      updatePnl,
+      deletePnl,
+      saveFxRate,
+      deleteFxRate,
+      convertToCNY
     }}>
       {children}
     </AppContext.Provider>

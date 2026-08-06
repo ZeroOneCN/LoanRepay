@@ -238,6 +238,138 @@ app.delete('/api/transactions/:id', (req, res) => {
   }
 });
 
+// ==================== 投资记账相关 ====================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invest_platforms (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    market TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    createdAt TEXT NOT NULL,
+    note TEXT
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invest_pnl (
+    id TEXT PRIMARY KEY,
+    platformId TEXT NOT NULL,
+    symbol TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    pnl REAL NOT NULL,
+    recordedAt TEXT NOT NULL,
+    note TEXT,
+    createdAt TEXT NOT NULL
+  )
+`);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fx_rates (
+    id TEXT PRIMARY KEY,
+    \`from\` TEXT NOT NULL UNIQUE,
+    rate REAL NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+// 平台
+app.get('/api/invest/platforms', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM invest_platforms ORDER BY createdAt DESC').all();
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/invest/platforms', (req, res) => {
+  try {
+    const { id, name, market, currency, createdAt, note } = req.body;
+    db.prepare('INSERT INTO invest_platforms (id, name, market, currency, createdAt, note) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(id, name, market, currency, createdAt, note || null);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/invest/platforms/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    if (fields.length === 0) return res.json({ success: true });
+    const setClause = fields.map(k => `${k} = ?`).join(', ');
+    const values = fields.map(k => req.body[k]);
+    db.prepare(`UPDATE invest_platforms SET ${setClause} WHERE id = ?`).run(...values, id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/invest/platforms/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM invest_platforms WHERE id = ?').run(req.params.id);
+    db.prepare('DELETE FROM invest_pnl WHERE platformId = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 盈亏记录
+app.get('/api/invest/pnl', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM invest_pnl ORDER BY recordedAt DESC, createdAt DESC').all();
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/invest/pnl', (req, res) => {
+  try {
+    const { id, platformId, symbol, currency, pnl, recordedAt, note, createdAt } = req.body;
+    db.prepare('INSERT INTO invest_pnl (id, platformId, symbol, currency, pnl, recordedAt, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, platformId, symbol, currency, pnl, recordedAt, note || null, createdAt);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/invest/pnl/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    if (fields.length === 0) return res.json({ success: true });
+    const setClause = fields.map(k => `${k} = ?`).join(', ');
+    const values = fields.map(k => req.body[k]);
+    db.prepare(`UPDATE invest_pnl SET ${setClause} WHERE id = ?`).run(...values, id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/invest/pnl/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM invest_pnl WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// 汇率
+app.get('/api/invest/rates', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM fx_rates').all();
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/invest/rates', (req, res) => {
+  try {
+    const { id, from, rate, updatedAt } = req.body;
+    db.prepare('INSERT OR REPLACE INTO fx_rates (id, `from`, rate, updatedAt) VALUES (?, ?, ?, ?)')
+      .run(id, from, rate, updatedAt);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/invest/rates/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM fx_rates WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`后端服务已启动: http://localhost:${PORT}`);
   console.log(`数据库文件: ${dbPath}`);

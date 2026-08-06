@@ -1,4 +1,4 @@
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, PnlRecord, FxRate } from '../types';
 
 const API_BASE = '/api';
 
@@ -160,4 +160,60 @@ export async function deleteTransaction(id: string): Promise<void> {
   await fetchApi(`${API_BASE}/transactions/${id}`, {
     method: 'DELETE'
   });
+}
+
+// ==================== 投资记账相关操作 ====================
+
+export async function getAllPlatforms(): Promise<InvestPlatform[]> {
+  return fetchApi(`${API_BASE}/invest/platforms`);
+}
+
+export async function addPlatform(p: InvestPlatform): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/platforms`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p)
+  });
+}
+
+export async function updatePlatform(id: string, updates: Partial<InvestPlatform>): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/platforms/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates)
+  });
+}
+
+export async function deletePlatform(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/platforms/${id}`, { method: 'DELETE' });
+}
+
+export async function getAllPnl(): Promise<PnlRecord[]> {
+  return fetchApi(`${API_BASE}/invest/pnl`);
+}
+
+export async function addPnl(p: PnlRecord): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/pnl`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p)
+  });
+}
+
+export async function updatePnl(id: string, updates: Partial<PnlRecord>): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/pnl/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates)
+  });
+}
+
+export async function deletePnl(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/pnl/${id}`, { method: 'DELETE' });
+}
+
+export async function getAllFxRates(): Promise<FxRate[]> {
+  return fetchApi(`${API_BASE}/invest/rates`);
+}
+
+export async function saveFxRate(r: FxRate): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/rates`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r)
+  });
+}
+
+export async function deleteFxRate(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/rates/${id}`, { method: 'DELETE' });
 }

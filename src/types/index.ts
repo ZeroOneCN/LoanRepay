@@ -153,3 +153,54 @@ export interface Transaction {
   created_at: string;
   note?: string;
 }
+
+// ==================== 投资记账 ====================
+
+export type InvestMarket = 'crypto' | 'us_stock' | 'hk_stock' | 'a_stock' | 'other';
+
+export const INVEST_MARKET_LABELS: Record<InvestMarket, string> = {
+  crypto: '加密货币',
+  us_stock: '美股',
+  hk_stock: '港股',
+  a_stock: 'A股',
+  other: '其他',
+};
+
+export type Currency = 'CNY' | 'USD' | 'HKD' | 'USDT';
+
+export const CURRENCY_LABELS: Record<Currency, string> = {
+  CNY: '人民币 CNY',
+  USD: '美元 USD',
+  HKD: '港币 HKD',
+  USDT: '泰达币 USDT',
+};
+
+/** 投资平台 */
+export interface InvestPlatform {
+  id: string;
+  name: string;
+  market: InvestMarket;
+  currency: Currency;
+  createdAt: string;
+  note?: string;
+}
+
+/** 盈亏快照记录：某平台某品种的累计历史总盈亏 */
+export interface PnlRecord {
+  id: string;
+  platformId: string;
+  symbol: string;        // 品种/标的，如 BTC、AAPL、00700
+  currency: Currency;     // 记录币种（默认继承平台币种，可单独覆盖）
+  pnl: number;            // 累计盈亏金额（负数为亏损）
+  recordedAt: string;     // 记录时间（用户填写的快照时间点）
+  note?: string;
+  createdAt: string;       // 系统创建时间
+}
+
+/** 全局汇率：target 固定为 CNY */
+export interface FxRate {
+  id: string;
+  from: Currency;          // 源币种（非 CNY）
+  rate: number;            // 1 单位源币种 = rate CNY
+  updatedAt: string;
+}

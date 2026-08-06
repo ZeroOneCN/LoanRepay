@@ -6,6 +6,7 @@ import {
   WalletOutlined,
   BankOutlined,
   ThunderboltOutlined,
+  FundOutlined,
   MenuUnfoldOutlined,
   MenuFoldOutlined
 } from '@ant-design/icons';
@@ -14,6 +15,7 @@ import Dashboard from './components/Dashboard';
 import DebtCenter from './components/DebtCenter';
 import FinanceCenter from './components/FinanceCenter';
 import StrategyCenter from './components/StrategyCenter';
+import InvestLedger from './components/InvestLedger';
 import { COLORS, FONT, FONT_WEIGHT, SPACING } from './styles/theme';
 
 const { Header, Sider, Content } = Layout;
@@ -22,6 +24,7 @@ const MENU_ITEMS = [
   { key: '/dashboard', icon: <DashboardOutlined />, label: '财务总览' },
   { key: '/debt', icon: <WalletOutlined />, label: '债务中心' },
   { key: '/finance', icon: <BankOutlined />, label: '资产负债' },
+  { key: '/invest', icon: <FundOutlined />, label: '投资记账' },
   { key: '/strategy', icon: <ThunderboltOutlined />, label: '还款策略' },
 ];
 
@@ -107,6 +110,7 @@ function AppContent() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/debt/*" element={<DebtCenter />} />
             <Route path="/finance/*" element={<FinanceCenter />} />
+            <Route path="/invest/*" element={<InvestLedger />} />
             <Route path="/strategy/*" element={<StrategyCenter />} />
             <Route path="*" element={<Dashboard />} />
           </Routes>
