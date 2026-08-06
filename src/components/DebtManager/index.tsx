@@ -1,9 +1,12 @@
 import { useState, useRef } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Upload } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, WalletOutlined, BankOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType, Debt } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
+import PageHeader from '../Common/PageHeader';
+import EmptyState from '../Common/EmptyState';
+import { COLORS, FONT, SPACING } from '../../styles/theme';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 
@@ -60,7 +63,6 @@ export default function DebtManager() {
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '债务数据');
-    // 设置列宽
     ws['!cols'] = [
       { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
       { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 20 }
@@ -133,9 +135,7 @@ export default function DebtManager() {
             '灵活模式': 'flexible'
           };
 
-          // 获取已存在的债务名称用于去重
           const existingNames = new Set(debts.map(d => d.name));
-
           let successCount = 0;
           let skipCount = 0;
           let errorCount = 0;
@@ -151,7 +151,6 @@ export default function DebtManager() {
                 continue;
               }
 
-              // 去重检查：已存在的债务名称跳过
               if (existingNames.has(String(name))) {
                 skipCount++;
                 continue;
@@ -174,7 +173,7 @@ export default function DebtManager() {
               };
 
               await addDebt(debtData);
-              existingNames.add(String(name)); // 防止Excel中重复
+              existingNames.add(String(name));
               successCount++;
             } catch {
               errorCount++;
@@ -243,8 +242,10 @@ export default function DebtManager() {
       };
       if (editingId) {
         await updateDebt(editingId, data);
+        message.success('债务更新成功');
       } else {
         await addDebt(data);
+        message.success('债务添加成功');
       }
       setIsModalOpen(false);
     } catch (e) {
@@ -262,10 +263,10 @@ export default function DebtManager() {
       title: '债务名称',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
+      width: 180,
       render: (text: string, record: any) => (
         <div style={{ wordBreak: 'break-all' }}>
-          <div style={{ fontWeight: 500, marginBottom: 4 }}>{text}</div>
+          <div style={{ fontWeight: 500, marginBottom: 4, fontSize: FONT.tableCell }}>{text}</div>
           <Space size={4} wrap>
             <Tag color="blue">{record.type}</Tag>
             <Tag color={getRepaymentTypeColor(record.repaymentType)}>
@@ -280,37 +281,20 @@ export default function DebtManager() {
       dataIndex: 'remainingAmount',
       key: 'remainingAmount',
       defaultSortOrder: 'descend' as const,
-      render: (val: number) => <span style={{ color: '#ff4d4f', fontWeight: 500 }}>¥{formatMoney(val)}</span>,
+      render: (val: number) => <span style={{ color: COLORS.danger, fontWeight: 500, fontSize: FONT.tableCell }}>¥{formatMoney(val)}</span>,
       sorter: (a: any, b: any) => a.remainingAmount - b.remainingAmount
     },
     {
       title: '总额度',
       dataIndex: 'creditLimit',
       key: 'creditLimit',
-      render: (val: number) => val ? `¥${formatMoney(val)}` : '-',
+      render: (val: number) => val ? <span style={{ fontSize: FONT.tableCell }}>¥{formatMoney(val)}</span> : '-',
       sorter: (a: any, b: any) => (a.creditLimit || 0) - (b.creditLimit || 0)
-    },
-    {
-      title: '已用额度',
-      key: 'usedCredit',
-      render: (_: any, record: any) => {
-        if (!record.creditLimit) return '-';
-        return <span style={{ color: '#ff4d4f', fontWeight: 500 }}>¥{formatMoney(record.remainingAmount)}</span>;
-      }
-    },
-    {
-      title: '剩余额度',
-      key: 'availableCredit',
-      render: (_: any, record: any) => {
-        if (!record.creditLimit) return '-';
-        const available = record.creditLimit - record.remainingAmount;
-        const color = available < 0 ? '#ff4d4f' : '#52c41a';
-        return <span style={{ color, fontWeight: 500 }}>¥{formatMoney(Math.max(0, available))}</span>;
-      }
     },
     {
       title: '使用率',
       key: 'usageRate',
+      width: 120,
       render: (_: any, record: any) => {
         if (!record.creditLimit) return '-';
         const rate = (record.remainingAmount / record.creditLimit) * 100;
@@ -324,6 +308,7 @@ export default function DebtManager() {
       title: '年利率',
       dataIndex: 'interestRate',
       key: 'interestRate',
+      width: 90,
       render: (val: number) => val ? <Tag color={val >= 18 ? 'red' : val >= 10 ? 'orange' : 'green'}>{val}%</Tag> : '-',
       sorter: (a: any, b: any) => (a.interestRate || 0) - (b.interestRate || 0)
     },
@@ -331,31 +316,38 @@ export default function DebtManager() {
       title: '出账日',
       dataIndex: 'dueDate',
       key: 'dueDate',
+      width: 90,
       render: (val: number) => val ? `每月${val}日` : '-'
     },
     {
       title: '最迟还款日',
       dataIndex: 'lastDueDate',
       key: 'lastDueDate',
+      width: 100,
       render: (val: number) => val ? `每月${val}日` : '-'
     },
     {
       title: '备注',
       dataIndex: 'note',
       key: 'note',
+      width: 120,
       render: (val: string) => val || '-',
       ellipsis: true
     },
     {
       title: '操作',
       key: 'action',
-      width: 80,
+      width: 120,
       fixed: 'right' as const,
       render: (_: any, record: any) => (
-        <Space size={0} wrap={false}>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); }} okText="确定" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} />
+        <Space size={0}>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            编辑
+          </Button>
+          <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
           </Popconfirm>
         </Space>
       )
@@ -364,27 +356,19 @@ export default function DebtManager() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h3 style={{ margin: 0 }}>债务管理</h3>
-          <p style={{ margin: '4px 0 0 0', color: '#666' }}>
-            总负债：<span style={{ color: '#ff4d4f', fontSize: 16, fontWeight: 600 }}>¥{formatMoney(totalDebt)}</span>
-            {totalCreditLimit > 0 && (
-              <>
-                <span style={{ marginLeft: 16 }}>总额度：<span style={{ color: '#1890ff', fontSize: 14, fontWeight: 500 }}>¥{formatMoney(totalCreditLimit)}</span></span>
-                <span style={{ marginLeft: 12 }}>已用：<span style={{ color: '#ff4d4f', fontSize: 14, fontWeight: 500 }}>¥{formatMoney(totalDebt)}</span></span>
-                <span style={{ marginLeft: 12 }}>剩余：<span style={{ color: totalAvailable >= 0 ? '#52c41a' : '#ff4d4f', fontSize: 14, fontWeight: 500 }}>¥{formatMoney(Math.max(0, totalAvailable))}</span></span>
-              </>
-            )}
-          </p>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          添加债务
-        </Button>
-      </div>
+      <PageHeader
+        title="债务管理"
+        subtitle={`总负债：¥${formatMoney(totalDebt)}${totalCreditLimit > 0 ? ` ｜ 总额度：¥${formatMoney(totalCreditLimit)} ｜ 剩余：¥${formatMoney(Math.max(0, totalAvailable))}` : ''}`}
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            添加债务
+          </Button>
+        }
+      />
 
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-        <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+      {/* 操作按钮组 */}
+      <div style={{ marginBottom: SPACING.lg, display: 'flex', gap: SPACING.sm }}>
+        <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate} size="small">
           下载模板
         </Button>
         <Upload
@@ -393,29 +377,39 @@ export default function DebtManager() {
           showUploadList={false}
           beforeUpload={handleImport}
         >
-          <Button icon={<UploadOutlined />} loading={importLoading}>
+          <Button icon={<UploadOutlined />} loading={importLoading} size="small">
             导入Excel
           </Button>
         </Upload>
-        <Button icon={<DownloadOutlined />} onClick={handleExport}>
+        <Button icon={<DownloadOutlined />} onClick={handleExport} size="small">
           导出数据
         </Button>
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={sortedDebts}
-        rowKey="id"
-        pagination={{
-          defaultPageSize: 10,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50'],
-          showQuickJumper: true,
-          showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
-        }}
-        size="middle"
-        scroll={{ x: 1200 }}
-      />
+      {/* 表格 */}
+      {debts.length === 0 ? (
+        <EmptyState
+          description="还没有债务记录，点击上方「添加债务」开始管理"
+          actionText="添加债务"
+          onAction={handleAdd}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={sortedDebts}
+          rowKey="id"
+          pagination={{
+            defaultPageSize: 10,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50'],
+            showQuickJumper: true,
+            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
+          }}
+          size="middle"
+          scroll={{ x: 1200 }}
+          rowClassName={() => 'debt-table-row'}
+        />
+      )}
 
       <Modal
         title={editingId ? '编辑债务' : '添加债务'}
@@ -484,7 +478,7 @@ export default function DebtManager() {
               <Form.Item
                 name="interestRate"
                 label="年利率（%）（可选）"
-                tooltip="如果不记得可以不填"
+                tooltip="信用卡通常18%，网贷15-24%，银行贷款3-8%"
               >
                 <InputNumber style={{ width: '100%' }} min={0} max={100} step={0.1} placeholder="如：18" />
               </Form.Item>

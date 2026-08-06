@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, message } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, BankOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { AssetType, LiquidityLevel, ASSET_TYPE_LABELS, LIQUIDITY_LABELS } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
+import PageHeader from '../Common/PageHeader';
+import StatisticCard from '../Common/StatisticCard';
+import EmptyState from '../Common/EmptyState';
+import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
 
@@ -48,8 +52,10 @@ export default function AssetManager() {
       const values = await form.validateFields();
       if (editingId) {
         await updateAsset(editingId, values);
+        message.success('资产更新成功');
       } else {
         await addAsset(values);
+        message.success('资产添加成功');
       }
       setIsModalOpen(false);
     } catch (e) {
@@ -63,6 +69,12 @@ export default function AssetManager() {
     low: 'red'
   };
 
+  const liquidityIcon = {
+    high: '●',
+    medium: '◆',
+    low: '▲'
+  };
+
   const columns = [
     {
       title: '资产名称',
@@ -70,7 +82,7 @@ export default function AssetManager() {
       key: 'name',
       render: (text: string, record: any) => (
         <Space direction="vertical" size={0}>
-          <span style={{ fontWeight: 500 }}>{text}</span>
+          <span style={{ fontWeight: 500, fontSize: FONT.tableCell }}>{text}</span>
           <Tag color="blue">{ASSET_TYPE_LABELS[record.type as AssetType]}</Tag>
         </Space>
       )
@@ -79,24 +91,29 @@ export default function AssetManager() {
       title: '金额',
       dataIndex: 'amount',
       key: 'amount',
-      render: (val: number) => <span style={{ color: '#52c41a', fontWeight: 500 }}>¥{formatMoney(val)}</span>,
+      render: (val: number) => <span style={{ color: COLORS.success, fontWeight: 500, fontSize: FONT.tableCell }}>¥{formatMoney(val)}</span>,
       sorter: (a: any, b: any) => a.amount - b.amount
     },
     {
       title: '流动性',
       dataIndex: 'liquidity',
       key: 'liquidity',
-      render: (val: LiquidityLevel) => <Tag color={liquidityColor[val]}>{LIQUIDITY_LABELS[val]}</Tag>
+      render: (val: LiquidityLevel) => (
+        <Tag color={liquidityColor[val]}>
+          {liquidityIcon[val]} {LIQUIDITY_LABELS[val]}
+        </Tag>
+      )
     },
     {
       title: '操作',
       key: 'action',
+      width: 150,
       render: (_: any, record: any) => (
-        <Space>
+        <Space size={0}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Popconfirm title="确定删除这笔资产？" onConfirm={async () => { await deleteAsset(record.id); }} okText="确定" cancelText="取消">
+          <Popconfirm title="确定删除这笔资产？" onConfirm={async () => { await deleteAsset(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               删除
             </Button>
@@ -112,28 +129,64 @@ export default function AssetManager() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div>
-          <h3 style={{ margin: 0 }}>资产管理</h3>
-          <p style={{ margin: '4px 0 0 0', color: '#666' }}>
-            总资产：<span style={{ color: '#52c41a', fontSize: 18, fontWeight: 600 }}>¥{formatMoney(totalAsset)}</span>
-            <span style={{ marginLeft: 16, fontSize: 12 }}>
-              高流动性：¥{formatMoney(highLiquidityAmount)}
-            </span>
-          </p>
-        </div>
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          添加资产
-        </Button>
-      </div>
-
-      <Table
-        columns={columns}
-        dataSource={assets}
-        rowKey="id"
-        pagination={false}
-        size="middle"
+      <PageHeader
+        title="资产管理"
+        subtitle="管理你的资产，了解资产流动性和分布情况"
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            添加资产
+          </Button>
+        }
       />
+
+      {/* 统计栏 */}
+      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
+        <Col xs={24} sm={12} md={8}>
+          <StatisticCard
+            title="总资产"
+            value={totalAsset}
+            precision={2}
+            prefix={<BankOutlined />}
+            suffix="元"
+            color={COLORS.success}
+          />
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <StatisticCard
+            title="高流动性资产"
+            value={highLiquidityAmount}
+            precision={2}
+            prefix="¥"
+            color={COLORS.primary}
+          />
+        </Col>
+        <Col xs={24} sm={12} md={8}>
+          <StatisticCard
+            title="资产笔数"
+            value={assets.length}
+            prefix="📦"
+            suffix="笔"
+            color={COLORS.textPrimary}
+          />
+        </Col>
+      </Row>
+
+      {/* 表格 */}
+      {assets.length === 0 ? (
+        <EmptyState
+          description="还没有资产记录，点击上方「添加资产」开始管理"
+          actionText="添加资产"
+          onAction={handleAdd}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={assets}
+          rowKey="id"
+          pagination={false}
+          size="middle"
+        />
+      )}
 
       <Modal
         title={editingId ? '编辑资产' : '添加资产'}

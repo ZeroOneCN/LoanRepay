@@ -1,17 +1,22 @@
 import { useMemo } from 'react';
-import { Row, Col, Card, Statistic, Progress, List, Tag, Space, Alert } from 'antd';
+import { Row, Col, Card, Progress, List, Tag, Space, Alert } from 'antd';
 import {
   DollarOutlined,
   RedEnvelopeOutlined,
   BankOutlined,
   CalculatorOutlined,
   RiseOutlined,
-  FallOutlined,
-  WarningOutlined
+  WarningOutlined,
+  PieChartOutlined,
+  AccountBookOutlined,
 } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useApp } from '../../context/AppContext';
 import { generateRepaymentPlan, formatMoney, calculateMinPayment, calculateMonthlyInterest, calculateCreditStats } from '../../utils/repaymentEngine';
+import PageHeader from '../Common/PageHeader';
+import StatisticCard from '../Common/StatisticCard';
+import EmptyState from '../Common/EmptyState';
+import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 export default function Dashboard() {
   const { debts, assets, incomeConfig, totalDebt, totalAsset, netWorth, strategy } = useApp();
@@ -42,33 +47,23 @@ export default function Dashboard() {
       legend: {
         orient: 'horizontal',
         bottom: 0,
-        textStyle: { fontSize: 11 },
+        textStyle: { fontSize: 12 },
         itemWidth: 14,
         itemHeight: 10
       },
-      series: [
-        {
-          type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['50%', '45%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 10,
-            borderColor: '#fff',
-            borderWidth: 2
-          },
-          label: { show: false },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: 14,
-              fontWeight: 'bold'
-            }
-          },
-          labelLine: { show: false },
-          data
-        }
-      ]
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '45%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
+        emphasis: {
+          label: { show: true, fontSize: 14, fontWeight: 'bold' }
+        },
+        labelLine: { show: false },
+        data
+      }]
     };
   }, [debts]);
 
@@ -86,44 +81,30 @@ export default function Dashboard() {
       legend: {
         orient: 'horizontal',
         bottom: 0,
-        textStyle: { fontSize: 11 },
+        textStyle: { fontSize: 12 },
         itemWidth: 14,
         itemHeight: 10
       },
-      series: [
-        {
-          type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['50%', '45%'],
-          avoidLabelOverlap: false,
-          itemStyle: {
-            borderRadius: 10,
-            borderColor: '#fff',
-            borderWidth: 2
-          },
-          label: { show: false },
-          emphasis: {
-            label: {
-              show: true,
-              fontSize: 14,
-              fontWeight: 'bold'
-            }
-          },
-          labelLine: { show: false },
-          data
-        }
-      ]
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '45%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+        label: { show: false },
+        emphasis: {
+          label: { show: true, fontSize: 14, fontWeight: 'bold' }
+        },
+        labelLine: { show: false },
+        data
+      }]
     };
   }, [assets]);
 
   const sortedDebts = [...debts].sort((a, b) => (b.interestRate || 0) - (a.interestRate || 0));
   const highRateDebts = debts.filter(d => (d.interestRate || 0) >= 18);
-  const totalMinPayment = debts.reduce((sum, d) => {
-    return sum + calculateMinPayment(d);
-  }, 0);
-  const totalMonthlyInterest = debts.reduce((sum, d) => {
-    return sum + calculateMonthlyInterest(d.remainingAmount, d.interestRate);
-  }, 0);
+  const totalMinPayment = debts.reduce((sum, d) => sum + calculateMinPayment(d), 0);
+  const totalMonthlyInterest = debts.reduce((sum, d) => sum + calculateMonthlyInterest(d.remainingAmount, d.interestRate), 0);
 
   const debtRatio = totalAsset > 0 ? (totalDebt / totalAsset) * 100 : totalDebt > 0 ? 100 : 0;
   const incomeCoverage = totalMinPayment > 0
@@ -135,120 +116,125 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h2 style={{ marginTop: 0 }}>财务总览</h2>
+      <PageHeader
+        title="财务总览"
+        subtitle="查看你的整体财务状况，了解债务风险与还款进度"
+      />
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      {/* 统计卡片行 */}
+      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="总资产"
-              value={totalAsset}
-              precision={2}
-              prefix={<BankOutlined style={{ color: '#52c41a' }} />}
-              suffix="元"
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
+          <StatisticCard
+            title="总资产"
+            value={totalAsset}
+            precision={2}
+            prefix={<BankOutlined />}
+            suffix="元"
+            color={COLORS.success}
+          />
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="总负债"
-              value={totalDebt}
-              precision={2}
-              prefix={<RedEnvelopeOutlined style={{ color: '#ff4d4f' }} />}
-              suffix="元"
-              valueStyle={{ color: '#ff4d4f' }}
-            />
-          </Card>
+          <StatisticCard
+            title="总负债"
+            value={totalDebt}
+            precision={2}
+            prefix={<RedEnvelopeOutlined />}
+            suffix="元"
+            color={COLORS.danger}
+          />
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="净资产"
-              value={netWorth}
-              precision={2}
-              prefix={<DollarOutlined style={{ color: netWorth >= 0 ? '#1890ff' : '#ff4d4f' }} />}
-              suffix="元"
-              valueStyle={{ color: netWorth >= 0 ? '#1890ff' : '#ff4d4f' }}
-            />
-          </Card>
+          <StatisticCard
+            title="净资产"
+            value={netWorth}
+            precision={2}
+            prefix={<DollarOutlined />}
+            suffix="元"
+            color={netWorth >= 0 ? COLORS.primary : COLORS.danger}
+          />
         </Col>
         <Col xs={24} sm={12} md={6}>
-          <Card>
-            <Statistic
-              title="负债率"
-              value={debtRatio}
-              precision={1}
-              suffix="%"
-              prefix={<CalculatorOutlined style={{ color: debtRatio > 70 ? '#ff4d4f' : debtRatio > 40 ? '#faad14' : '#52c41a' }} />}
-              valueStyle={{ color: debtRatio > 70 ? '#ff4d4f' : debtRatio > 40 ? '#faad14' : '#52c41a' }}
-            />
-          </Card>
+          <StatisticCard
+            title="负债率"
+            value={debtRatio}
+            precision={1}
+            prefix={<CalculatorOutlined />}
+            suffix="%"
+            color={debtRatio > 70 ? COLORS.danger : debtRatio > 40 ? COLORS.warning : COLORS.success}
+          />
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      {/* 关键指标 + 风险评估 */}
+      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
         <Col xs={24} md={12}>
-          <Card title="关键指标" size="small">
+          <Card title={<span style={{ fontSize: FONT.h2, fontWeight: 600 }}>关键指标</span>} size="small" style={{ height: '100%' }}>
             <Space direction="vertical" style={{ width: '100%' }} size="middle">
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>每月最低还款</span>
-                  <span style={{ fontWeight: 500 }}>¥{formatMoney(totalMinPayment)}</span>
+                  <span style={{ fontSize: FONT.body }}>每月最低还款</span>
+                  <span style={{ fontWeight: 500, fontSize: FONT.body }}>¥{formatMoney(totalMinPayment)}</span>
                 </div>
                 <Progress
                   percent={incomeCoverage}
-                  strokeColor={incomeCoverage >= 100 ? '#52c41a' : incomeCoverage >= 80 ? '#faad14' : '#ff4d4f'}
+                  strokeColor={incomeCoverage >= 100 ? COLORS.success : incomeCoverage >= 80 ? COLORS.warning : COLORS.danger}
                   format={() => `可覆盖 ${incomeCoverage.toFixed(1)}%`}
+                  size="small"
                 />
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>每月产生利息</span>
-                  <span style={{ color: '#faad14', fontWeight: 500 }}>¥{formatMoney(totalMonthlyInterest)}</span>
+                  <span style={{ fontSize: FONT.body }}>每月产生利息</span>
+                  <span style={{ color: COLORS.warning, fontWeight: 500 }}>¥{formatMoney(totalMonthlyInterest)}</span>
                 </div>
-                <div style={{ color: '#999', fontSize: 12 }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>
                   相当于每天利息约 ¥{formatMoney(totalMonthlyInterest / 30)}
                 </div>
               </div>
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>预计还清时间</span>
+                  <span style={{ fontSize: FONT.body }}>预计还清时间</span>
                   <span style={{ fontWeight: 500 }}>
                     {currentPlan.totalMonths > 0 ? `${currentPlan.totalMonths}个月` : '--'}
                   </span>
                 </div>
-                <div style={{ color: '#999', fontSize: 12 }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>
                   预计还清日期：{currentPlan.payoffDate || '--'}
                 </div>
               </div>
               {hasCreditData && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span>整体额度使用率</span>
-                    <span style={{ fontWeight: 500, color: creditStats.overallUsageRate >= 90 ? '#ff4d4f' : creditStats.overallUsageRate >= 70 ? '#faad14' : '#52c41a' }}>
+                    <span style={{ fontSize: FONT.body }}>整体额度使用率</span>
+                    <span style={{
+                      fontWeight: 500,
+                      color: creditStats.overallUsageRate >= 90 ? COLORS.danger : creditStats.overallUsageRate >= 70 ? COLORS.warning : COLORS.success
+                    }}>
                       {creditStats.overallUsageRate.toFixed(1)}%
                     </span>
                   </div>
                   <Progress
                     percent={creditStats.overallUsageRate}
-                    strokeColor={creditStats.overallUsageRate >= 90 ? '#ff4d4f' : creditStats.overallUsageRate >= 70 ? '#faad14' : '#52c41a'}
+                    strokeColor={creditStats.overallUsageRate >= 90 ? COLORS.danger : creditStats.overallUsageRate >= 70 ? COLORS.warning : COLORS.success}
                     format={() => `可用 ¥${formatMoney(creditStats.totalAvailable)}`}
+                    size="small"
                   />
-                  <div style={{ color: '#999', fontSize: 12, marginTop: 4 }}>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginTop: 4 }}>
                     总额度 ¥{formatMoney(creditStats.totalCreditLimit)}
                   </div>
                 </div>
               )}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span>应急资金储备</span>
-                  <span style={{ fontWeight: 500, color: emergencyMonths >= 6 ? '#52c41a' : emergencyMonths >= 3 ? '#faad14' : '#ff4d4f' }}>
+                  <span style={{ fontSize: FONT.body }}>应急资金储备</span>
+                  <span style={{
+                    fontWeight: 500,
+                    color: emergencyMonths >= 6 ? COLORS.success : emergencyMonths >= 3 ? COLORS.warning : COLORS.danger
+                  }}>
                     {emergencyMonths.toFixed(1)}个月
                   </span>
                 </div>
-                <div style={{ color: '#999', fontSize: 12 }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>
                   高流动性资产 / 月支出
                 </div>
               </div>
@@ -257,7 +243,7 @@ export default function Dashboard() {
         </Col>
 
         <Col xs={24} md={12}>
-          <Card title="风险评估" size="small">
+          <Card title={<span style={{ fontSize: FONT.h2, fontWeight: 600 }}>风险评估</span>} size="small" style={{ height: '100%' }}>
             {highRateDebts.length > 0 && (
               <Alert
                 message={`有 ${highRateDebts.length} 笔高利率债务（≥18%）`}
@@ -265,7 +251,7 @@ export default function Dashboard() {
                 type="warning"
                 showIcon
                 icon={<WarningOutlined />}
-                style={{ marginBottom: 12 }}
+                style={{ marginBottom: SPACING.md }}
               />
             )}
             {hasCreditData && creditStats.overallUsageRate >= 80 && (
@@ -275,7 +261,7 @@ export default function Dashboard() {
                 type="error"
                 showIcon
                 icon={<WarningOutlined />}
-                style={{ marginBottom: 12 }}
+                style={{ marginBottom: SPACING.md }}
               />
             )}
             <Alert
@@ -289,7 +275,7 @@ export default function Dashboard() {
               }
               type={incomeCoverage >= 100 ? 'success' : incomeCoverage >= 80 ? 'warning' : 'error'}
               showIcon
-              style={{ marginBottom: 12 }}
+              style={{ marginBottom: SPACING.md }}
             />
             <Alert
               message={emergencyMonths >= 6 ? '应急资金充足' : emergencyMonths >= 3 ? '应急资金一般' : '应急资金不足'}
@@ -307,40 +293,49 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+      {/* 图表区 */}
+      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
         <Col xs={24} md={12}>
-          <Card title="债务分布" size="small">
+          <Card title={<span style={{ fontSize: FONT.h2, fontWeight: 600 }}>债务分布</span>} size="small">
             {debts.length > 0 ? (
-              <ReactECharts option={debtPieOption} style={{ height: 250 }} notMerge={true} />
+              <ReactECharts option={debtPieOption} style={{ height: 260 }} notMerge={true} />
             ) : (
-              <p style={{ textAlign: 'center', color: '#999', padding: '50px 0' }}>暂无债务数据</p>
+              <EmptyState description="暂无债务数据" />
             )}
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title="资产分布" size="small">
+          <Card title={<span style={{ fontSize: FONT.h2, fontWeight: 600 }}>资产分布</span>} size="small">
             {assets.length > 0 ? (
-              <ReactECharts option={assetPieOption} style={{ height: 250 }} notMerge={true} />
+              <ReactECharts option={assetPieOption} style={{ height: 260 }} notMerge={true} />
             ) : (
-              <p style={{ textAlign: 'center', color: '#999', padding: '50px 0' }}>暂无资产数据</p>
+              <EmptyState description="暂无资产数据" />
             )}
           </Card>
         </Col>
       </Row>
 
-      <Card title="高利率债务优先偿还建议" size="small">
+      {/* 高利率债务列表 */}
+      <Card
+        title={<span style={{ fontSize: FONT.h2, fontWeight: 600 }}>高利率债务优先偿还建议</span>}
+        size="small"
+      >
         {sortedDebts.length === 0 ? (
-          <p style={{ color: '#999' }}>暂无债务数据</p>
+          <EmptyState description="暂无债务数据" />
         ) : (
           <List
             size="small"
             dataSource={sortedDebts.slice(0, 5)}
             renderItem={(item) => (
-              <List.Item>
+              <List.Item
+                style={{ transition: 'background 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              >
                 <List.Item.Meta
                   title={
                     <Space>
-                      <span>{item.name}</span>
+                      <span style={{ fontSize: FONT.body }}>{item.name}</span>
                       <Tag color={(item.interestRate || 0) >= 18 ? 'red' : (item.interestRate || 0) >= 12 ? 'orange' : 'green'}>
                         {item.interestRate ? `${item.interestRate}%` : '-'}
                       </Tag>
@@ -348,15 +343,15 @@ export default function Dashboard() {
                     </Space>
                   }
                   description={
-                    <span>
-                      剩余：<span style={{ color: '#ff4d4f' }}>¥{formatMoney(item.remainingAmount)}</span>
-                      <span style={{ marginLeft: 16 }}>
+                    <span style={{ fontSize: FONT.bodySmall }}>
+                      剩余：<span style={{ color: COLORS.danger }}>¥{formatMoney(item.remainingAmount)}</span>
+                      <span style={{ marginLeft: SPACING.lg }}>
                         月利息：¥{formatMoney(calculateMonthlyInterest(item.remainingAmount, item.interestRate))}
                       </span>
                     </span>
                   }
                 />
-                <RiseOutlined style={{ color: '#ff4d4f' }} />
+                <RiseOutlined style={{ color: COLORS.danger }} />
               </List.Item>
             )}
           />
