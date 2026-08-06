@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Tabs, Table, Button, Modal, Form, Input, Select, Popconfirm, Tag, Checkbox, message } from 'antd';
+import { Tabs, Table, Button, Modal, Form, Input, Select, Popconfirm, Tag, Checkbox, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { InvestMarket, INVEST_MARKET_LABELS, Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
@@ -17,20 +17,31 @@ const productColor: Record<ProductType, string> = {
   spot: 'green', futures: 'magenta'
 };
 
+function MarketTags({ markets }: { markets?: InvestMarket[] }) {
+  if (!markets || markets.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>-</span>;
+  return (
+    <Space size={4} wrap>
+      {markets.map(m => (
+        <Tag key={m} color={marketColor[m]}>{INVEST_MARKET_LABELS[m]}</Tag>
+      ))}
+    </Space>
+  );
+}
+
 function ProductTypeTags({ types }: { types?: ProductType[] }) {
   if (!types || types.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>-</span>;
   return (
-    <span>
+    <Space size={4} wrap>
       {types.map(t => (
-        <Tag key={t} color={productColor[t]} style={{ marginRight: 4 }}>{PRODUCT_TYPE_LABELS[t]}</Tag>
+        <Tag key={t} color={productColor[t]}>{PRODUCT_TYPE_LABELS[t]}</Tag>
       ))}
-    </span>
+    </Space>
   );
 }
 
 interface PlatformFormValues {
   name: string;
-  market: InvestMarket;
+  markets: InvestMarket[];
   currency: Currency;
   note?: string;
 }
@@ -63,19 +74,30 @@ export default function PlatformManager() {
   const openAddP = () => {
     setPEditingId(null);
     pForm.resetFields();
-    pForm.setFieldsValue({ market: 'crypto', currency: 'USDT' });
+    pForm.setFieldsValue({ markets: ['crypto'], currency: 'USDT' });
     setPModalOpen(true);
   };
   const openEditP = (record: any) => {
     setPEditingId(record.id);
-    pForm.setFieldsValue({ name: record.name, market: record.market, currency: record.currency, note: record.note });
+    // 兼容老的 market 单值字段
+    let ms = record.markets;
+    if (!ms && record.market) ms = [record.market];
+    pForm.setFieldsValue({
+      name: record.name,
+      markets: Array.isArray(ms) ? ms : (ms ? [ms] : []),
+      currency: record.currency,
+      note: record.note,
+    });
     setPModalOpen(true);
   };
   const submitP = async () => {
     try {
       const values = await pForm.validateFields();
       if (!values.name?.trim()) { message.warning('请输入平台名称'); return; }
-      const data = { name: values.name.trim(), market: values.market, currency: values.currency, note: values.note };
+      if (!values.markets || values.markets.length === 0) {
+        message.warning('请选择市场类型'); return;
+      }
+      const data = { name: values.name.trim(), markets: values.markets, currency: values.currency, note: values.note };
       if (pEditingId) { await updatePlatform(pEditingId, data); message.success('更新成功'); }
       else { await addPlatform(data); message.success('添加成功'); }
       setPModalOpen(false);
@@ -95,10 +117,11 @@ export default function PlatformManager() {
     aForm.resetFields();
     const defaultPid = platformId || (accountFilter !== 'all' ? accountFilter : platforms[0]?.id);
     const defaultPf = platforms.find(p => p.id === defaultPid);
+    const isCrypto = defaultPf?.markets?.includes('crypto');
     aForm.setFieldsValue({
       platformId: defaultPid,
       currency: defaultPf?.currency || 'USDT',
-      productTypes: defaultPf?.market === 'crypto' ? ['spot'] : undefined,
+      productTypes: isCrypto ? ['spot'] : undefined,
     });
     setAModalOpen(true);
   };
@@ -122,7 +145,7 @@ export default function PlatformManager() {
       if (!values.name?.trim()) { message.warning('请输入账户名称'); return; }
       if (!values.platformId) { message.warning('请选择所属平台'); return; }
       const pf = platforms.find(p => p.id === values.platformId);
-      const isCrypto = pf?.market === 'crypto';
+      const isCrypto = pf?.markets?.includes('crypto');
       if (isCrypto && (!values.productTypes || values.productTypes.length === 0)) {
         message.warning('请选择类型（现货/合约）'); return;
       }
@@ -144,14 +167,15 @@ export default function PlatformManager() {
     message.success(relCount > 0 ? `已删除账户及关联的 ${relCount} 条盈亏记录` : '删除成功');
   };
 
-  const selectedPlatformForAccount = aForm.getFieldValue?.('platformId');
-  // 每次 modal 打开时判断当前市场
-  const currentPlatformMarket = useMemo(() => {
+  const selectedPlatformForAccount = Form.useWatch('platformId', aForm);
+  // 当前选中平台的市场（数组）
+  const selectedPlatformMarkets = useMemo(() => {
     if (!aModalOpen) return null;
-    const pid = selectedPlatformForAccount;
-    if (!pid) return null;
-    return platforms.find(p => p.id === pid)?.market || null;
+    if (!selectedPlatformForAccount) return null;
+    const pf = platforms.find(p => p.id === selectedPlatformForAccount);
+    return pf?.markets || null;
   }, [aModalOpen, selectedPlatformForAccount, platforms]);
+  const isCryptoPlatform = selectedPlatformMarkets?.includes('crypto');
 
   const filteredAccounts = useMemo(() => {
     return accountFilter === 'all' ? accounts : accounts.filter(a => a.platformId === accountFilter);
@@ -160,33 +184,40 @@ export default function PlatformManager() {
   // ====== 列定义：平台 ======
   const platformColumns = [
     { title: '平台名称', dataIndex: 'name', key: 'name', render: (t: string) => <span style={{ fontWeight: 500, fontSize: FONT.tableCell }}>{t}</span> },
-    { title: '市场', dataIndex: 'market', key: 'market', width: 120, render: (m: InvestMarket) => <Tag color={marketColor[m]}>{INVEST_MARKET_LABELS[m]}</Tag> },
+    {
+      title: '市场', key: 'markets', width: 160,
+      render: (_: any, r: any) => {
+        let ms = r.markets;
+        if (!ms && r.market) ms = [r.market];
+        return <MarketTags markets={Array.isArray(ms) ? ms : (ms ? [ms] : undefined)} />;
+      }
+    },
     { title: '默认币种', dataIndex: 'currency', key: 'currency', width: 100, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
     {
-      title: '账户数', key: 'accCount', width: 90,
+      title: '账户数', key: 'accCount', width: 80,
       render: (_: any, r: any) => {
         const count = accounts.filter(a => a.platformId === r.id).length;
-        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count} 个</span>;
+        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count}</span>;
       }
     },
     {
-      title: '盈亏记录', key: 'pnlCount', width: 100,
+      title: '盈亏记录', key: 'pnlCount', width: 80,
       render: (_: any, r: any) => {
         const count = pnlRecords.filter(p => p.platformId === r.id).length;
-        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count} 条</span>;
+        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count}</span>;
       }
     },
     { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true, render: (v: string) => <span style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{v || '-'}</span> },
     {
-      title: '操作', key: 'action', width: 180,
+      title: '操作', key: 'action', width: 200, fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <div style={{ display: 'flex', gap: 0 }}>
+        <Space size={0} wrap={false}>
           <Button type="link" size="small" icon={<TeamOutlined />} onClick={() => { setAccountFilter(r.id); setActiveKey('account'); }} style={{ padding: '0 4px' }}>账户</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditP(r)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="删除平台将同时删除其下所有账户和盈亏，确定？" onConfirm={() => deleteP(r.id)} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
-        </div>
+        </Space>
       )
     }
   ];
@@ -205,7 +236,13 @@ export default function PlatformManager() {
         );
       }
     },
-    { title: '市场', key: 'market', width: 110, render: (_: any, r: any) => { const pf = platforms.find(p => p.id === r.platformId); return pf ? <Tag color={marketColor[pf.market]}>{INVEST_MARKET_LABELS[pf.market]}</Tag> : '-'; } },
+    {
+      title: '市场', key: 'markets', width: 160,
+      render: (_: any, r: any) => {
+        const pf = platforms.find(p => p.id === r.platformId);
+        return <MarketTags markets={pf?.markets} />;
+      }
+    },
     {
       title: '类型', key: 'productType', width: 120,
       render: (_: any, r: any) => {
@@ -215,24 +252,24 @@ export default function PlatformManager() {
         return <ProductTypeTags types={Array.isArray(pts) ? pts : (pts ? [pts] : undefined)} />;
       }
     },
-    { title: '币种', dataIndex: 'currency', key: 'currency', width: 90, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
+    { title: '币种', dataIndex: 'currency', key: 'currency', width: 80, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
     {
-      title: '盈亏记录', key: 'pnlCount', width: 90,
+      title: '盈亏记录', key: 'pnlCount', width: 80,
       render: (_: any, r: any) => {
         const count = pnlRecords.filter(p => p.accountId === r.id).length;
-        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count} 条</span>;
+        return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count}</span>;
       }
     },
     { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true, render: (v: string) => <span style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{v || '-'}</span> },
     {
-      title: '操作', key: 'action', width: 120,
+      title: '操作', key: 'action', width: 120, fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <div style={{ display: 'flex', gap: 0 }}>
+        <Space size={0} wrap={false}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditA(r)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="删除账户将同时删除其下所有盈亏记录，确定？" onConfirm={() => deleteA(r.id)} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
-        </div>
+        </Space>
       )
     }
   ];
@@ -253,7 +290,7 @@ export default function PlatformManager() {
                 {platforms.length === 0 ? (
                   <EmptyState description="暂无平台，点击「添加平台」开始" actionText="添加平台" onAction={openAddP} />
                 ) : (
-                  <Table columns={platformColumns} dataSource={platforms} rowKey="id" pagination={false} size="middle" />
+                  <Table columns={platformColumns} dataSource={platforms} rowKey="id" pagination={false} size="middle" scroll={{ x: 'max-content' }} />
                 )}
               </SectionCard>
             )
@@ -282,7 +319,7 @@ export default function PlatformManager() {
                     onAction={platforms.length > 0 ? () => openAddA() : undefined}
                   />
                 ) : (
-                  <Table columns={accountColumns} dataSource={filteredAccounts} rowKey="id" pagination={false} size="middle" />
+                  <Table columns={accountColumns} dataSource={filteredAccounts} rowKey="id" pagination={false} size="middle" scroll={{ x: 'max-content' }} />
                 )}
               </SectionCard>
             )
@@ -291,17 +328,22 @@ export default function PlatformManager() {
       />
 
       {/* 平台 Modal */}
-      <Modal title={pEditingId ? '编辑平台' : '添加平台'} open={pModalOpen} onOk={submitP} onCancel={() => setPModalOpen(false)} okText="保存" cancelText="取消" width={480} maskClosable={false}>
+      <Modal title={pEditingId ? '编辑平台' : '添加平台'} open={pModalOpen} onOk={submitP} onCancel={() => setPModalOpen(false)} okText="保存" cancelText="取消" width={520} maskClosable={false}>
         <Form form={pForm} layout="vertical">
           <Form.Item name="name" label="平台名称" rules={[{ required: true, message: '请输入平台名称' }]}>
             <Input placeholder="如：Binance、富途、老虎证券" />
           </Form.Item>
-          <Form.Item name="market" label="市场类型" rules={[{ required: true, message: '请选择市场' }]}>
-            <Select>
-              {(Object.keys(INVEST_MARKET_LABELS) as InvestMarket[]).map(m => (
-                <Option key={m} value={m}>{INVEST_MARKET_LABELS[m]}</Option>
-              ))}
-            </Select>
+          <Form.Item
+            name="markets"
+            label="市场类型（可多选）"
+            tooltip="某券商同时支持美股和港股时可同时选择，至少选一个"
+            rules={[{ required: true, message: '请选择市场类型' }]}
+          >
+            <Checkbox.Group
+              options={(Object.keys(INVEST_MARKET_LABELS) as InvestMarket[]).map(m => ({
+                label: INVEST_MARKET_LABELS[m], value: m
+              }))}
+            />
           </Form.Item>
           <Form.Item name="currency" label="默认记账币种" rules={[{ required: true, message: '请选择币种' }]} tooltip="该平台下新账户的默认币种，账户可单独覆盖">
             <Select>
@@ -318,18 +360,26 @@ export default function PlatformManager() {
         open={aModalOpen}
         onOk={submitA}
         onCancel={() => setAModalOpen(false)}
-        okText="保存" cancelText="取消" width={480} maskClosable={false}
+        okText="保存" cancelText="取消" width={520} maskClosable={false}
         destroyOnClose
       >
         <Form form={aForm} layout="vertical">
           <Form.Item name="platformId" label="所属平台" rules={[{ required: true, message: '请选择平台' }]}>
-            <Select placeholder="选择所属平台" onChange={(pid) => {
-              const pf = platforms.find(p => p.id === pid);
-              if (pf) {
-                aForm.setFieldsValue({ currency: pf.currency, productTypes: pf.market === 'crypto' ? ['spot'] : undefined });
-              }
-            }}>
-              {platforms.map(p => <Option key={p.id} value={p.id}>{p.name}（{INVEST_MARKET_LABELS[p.market]}）</Option>)}
+            <Select
+              placeholder="选择所属平台"
+              onChange={(pid) => {
+                const pf = platforms.find(p => p.id === pid);
+                if (pf) {
+                  const isCrypto = pf.markets?.includes('crypto');
+                  aForm.setFieldsValue({ currency: pf.currency, productTypes: isCrypto ? ['spot'] : undefined });
+                }
+              }}
+            >
+              {platforms.map(p => (
+                <Option key={p.id} value={p.id}>
+                  {p.name}（{(p.markets || []).map(m => INVEST_MARKET_LABELS[m]).join(' + ') || '未知市场'}）
+                </Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item name="name" label="账户名称" rules={[{ required: true, message: '请输入账户名称' }]}>
@@ -340,7 +390,7 @@ export default function PlatformManager() {
               {(Object.keys(CURRENCY_LABELS) as Currency[]).map(c => <Option key={c} value={c}>{CURRENCY_LABELS[c]}</Option>)}
             </Select>
           </Form.Item>
-          {currentPlatformMarket === 'crypto' && (
+          {isCryptoPlatform && (
             <Form.Item
               name="productTypes"
               label="类型（可多选）"

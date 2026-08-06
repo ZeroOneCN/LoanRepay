@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Popconfirm, Tag, message } from 'antd';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Popconfirm, Tag, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
@@ -207,14 +207,15 @@ export default function PnlRecords() {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 130,
+      fixed: 'right' as const,
       render: (_: any, r: any) => (
-        <div style={{ display: 'flex', gap: 0 }}>
+        <Space size={0} wrap={false}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="确定删除？" onConfirm={() => handleDelete(r.id)} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
-        </div>
+        </Space>
       )
     }
   ];
@@ -253,6 +254,7 @@ export default function PnlRecords() {
           rowKey="id"
           pagination={{ defaultPageSize: 15, showSizeChanger: true, pageSizeOptions: ['15', '30', '50'], showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条` }}
           size="middle"
+          scroll={{ x: 'max-content' }}
         />
       )}
 

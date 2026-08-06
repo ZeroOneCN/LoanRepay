@@ -187,7 +187,7 @@ export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
 export interface InvestPlatform {
   id: string;
   name: string;
-  market: InvestMarket;
+  markets: InvestMarket[];  // 平台支持的市场（可多选，如某券商同时支持美股+港股）
   currency: Currency;    // 平台默认币种（账户会继承或覆盖）
   createdAt: string;
   note?: string;

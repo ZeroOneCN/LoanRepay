@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Row, Col, Button, Empty, Tag } from 'antd';
+import { Row, Col, Button, Empty, Tag, Space } from 'antd';
 import { RiseOutlined, FallOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useApp } from '../../context/AppContext';
@@ -24,16 +24,18 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
 
   // 按账户汇总（CNY 口径），同时包含所属平台
   const byAccount = useMemo(() => {
-    const map = new Map<string, { name: string; platformName: string; market: InvestMarket; productTypes?: ProductType[]; pnlCNY: number; recordCount: number }>();
+    const map = new Map<string, { name: string; platformName: string; markets: InvestMarket[]; productTypes?: ProductType[]; pnlCNY: number; recordCount: number }>();
     pnlRecords.forEach(r => {
       const acc = accounts.find(a => a.id === r.accountId);
       const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
       const key = acc?.id || r.platformId || 'unknown';
       const accName = acc?.name || (pf ? `${pf.name}（旧数据）` : '未知账户');
-      // 兼容老的单值 productType 字段
+      // 兼容老的单值 market / productType 字段
+      let mkts = pf?.markets;
+      if (!mkts && (pf as any)?.market) mkts = [(pf as any).market];
       let pts = acc?.productTypes;
       if (!pts && (acc as any)?.productType) pts = [(acc as any).productType];
-      const existing = map.get(key) || { name: accName, platformName: pf?.name || '未知', market: (pf?.market || 'other') as InvestMarket, productTypes: pts, pnlCNY: 0, recordCount: 0 };
+      const existing = map.get(key) || { name: accName, platformName: pf?.name || '未知', markets: Array.isArray(mkts) && mkts.length > 0 ? mkts : ['other'], productTypes: pts, pnlCNY: 0, recordCount: 0 };
       existing.pnlCNY += convertToCNY(r.pnl, r.currency);
       existing.recordCount += 1;
       map.set(key, existing);
@@ -56,39 +58,45 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
     return Array.from(map.values()).sort((a, b) => b.pnlCNY - a.pnlCNY);
   }, [pnlRecords, platforms, accounts, fxRates]);
 
-  // 按市场汇总
+  // 按市场汇总：平台可多市场，记录计入其所属平台的全部市场（市场敞口口径）
   const byMarket = useMemo(() => {
     const map = new Map<InvestMarket, number>();
     pnlRecords.forEach(r => {
       const acc = accounts.find(a => a.id === r.accountId);
       const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
-      const market = (pf?.market || 'other') as InvestMarket;
-      map.set(market, (map.get(market) || 0) + convertToCNY(r.pnl, r.currency));
+      let mkts = pf?.markets;
+      if (!mkts && (pf as any)?.market) mkts = [(pf as any).market];
+      const arr: InvestMarket[] = Array.isArray(mkts) && mkts.length > 0 ? mkts : ['other'];
+      const cnyVal = convertToCNY(r.pnl, r.currency);
+      arr.forEach(m => map.set(m, (map.get(m) || 0) + cnyVal));
     });
     return Array.from(map.entries()).map(([market, value]) => ({ market, value }));
   }, [pnlRecords, platforms, accounts, fxRates]);
 
-  const marketPieOption = useMemo(() => {
+  // 多市场下记录会重复计入多个市场，改用条形图展示市场敞口，避免饼图占比失真
+  const marketBarOption = useMemo(() => {
     if (byMarket.length === 0) return {};
     const colorMap: Record<InvestMarket, string> = {
       crypto: COLORS.orange, us_stock: COLORS.primary, hk_stock: COLORS.purple, a_stock: COLORS.danger, other: COLORS.textTertiary
     };
+    const sorted = [...byMarket].sort((a, b) => b.value - a.value);
     return {
-      tooltip: { trigger: 'item', formatter: (p: any) => `${p.name}<br/>¥${formatMoney(p.value)} (${p.percent}%)` },
-      legend: { orient: 'horizontal', bottom: 0, textStyle: { fontSize: 12 }, itemWidth: 14, itemHeight: 10 },
+      tooltip: { trigger: 'axis', formatter: (p: any) => `${p[0].name}<br/>${p[0].marker}¥${formatMoney(p[0].value)}` },
+      grid: { left: '3%', right: '6%', bottom: '3%', top: '8%', containLabel: true },
+      xAxis: { type: 'value', axisLabel: { fontSize: 11, formatter: (v: number) => v >= 10000 ? `${(v / 10000).toFixed(1)}万` : v.toFixed(0) } },
+      yAxis: {
+        type: 'category',
+        data: sorted.map(d => INVEST_MARKET_LABELS[d.market]),
+        axisLabel: { fontSize: 12 }
+      },
       series: [{
-        type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '45%'],
-        itemStyle: { borderRadius: 0, borderColor: '#fff', borderWidth: 2 },
-        label: { show: false },
-        emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
-        labelLine: { show: false },
-        data: byMarket.map(d => ({
-          name: INVEST_MARKET_LABELS[d.market],
+        type: 'bar',
+        data: sorted.map(d => ({
           value: Number(d.value.toFixed(2)),
-          itemStyle: { color: colorMap[d.market] }
-        }))
+          itemStyle: { color: d.value >= 0 ? colorMap[d.market] : COLORS.danger }
+        })),
+        barWidth: '50%',
+        label: { show: true, position: 'right', fontSize: 11, formatter: (p: any) => `¥${formatMoney(p.value)}` }
       }]
     };
   }, [byMarket]);
@@ -166,9 +174,9 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
           </SectionCard>
         </Col>
         <Col xs={24} md={12}>
-          <SectionCard title="各市场占比">
+          <SectionCard title="各市场盈亏（CNY 敞口）" extra={<span style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>多市场平台按各市场计入</span>}>
             {byMarket.length > 0 ? (
-              <ReactECharts option={marketPieOption} style={{ height: 280 }} notMerge={true} />
+              <ReactECharts option={marketBarOption} style={{ height: 280 }} notMerge={true} />
             ) : (
               <Empty description="暂无市场数据" />
             )}
@@ -194,9 +202,13 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
                 border: `1px solid ${COLORS.border}`,
                 background: COLORS.bgLight
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm }}>
-                  <div style={{ fontWeight: 500, fontSize: FONT.h3 }}>{a.name}</div>
-                  <Tag style={{ fontSize: FONT.caption }}>{INVEST_MARKET_LABELS[a.market]}</Tag>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.sm, gap: SPACING.sm }}>
+                  <div style={{ fontWeight: 500, fontSize: FONT.h3, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
+                  <Space size={4} wrap>
+                    {a.markets.map(m => (
+                      <Tag key={m} style={{ fontSize: FONT.caption, marginRight: 0 }}>{INVEST_MARKET_LABELS[m]}</Tag>
+                    ))}
+                  </Space>
                 </div>
                 <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginBottom: SPACING.md }}>
                   {a.platformName}

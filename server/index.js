@@ -290,18 +290,33 @@ db.exec(`
 `);
 
 // 平台
+// 注：markets 以 JSON 字符串存储在 invest_platforms.market 列中
+function parsePlatformRow(row) {
+  if (!row) return row;
+  let ms = row.market;
+  if (typeof ms === 'string' && ms.length > 0) {
+    try { ms = JSON.parse(ms); } catch (e) { ms = null; }
+  } else {
+    ms = null;
+  }
+  // 兼容老的单值字符串（'crypto' / 'us_stock' 等）
+  if (typeof ms === 'string') ms = [ms];
+  return { ...row, markets: Array.isArray(ms) ? ms : (ms ? [ms] : []) };
+}
+
 app.get('/api/invest/platforms', (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM invest_platforms ORDER BY createdAt DESC').all();
+    const rows = db.prepare('SELECT * FROM invest_platforms ORDER BY createdAt DESC').all().map(parsePlatformRow);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/invest/platforms', (req, res) => {
   try {
-    const { id, name, market, currency, createdAt, note } = req.body;
+    const { id, name, markets, currency, createdAt, note } = req.body;
+    const mJson = Array.isArray(markets) && markets.length > 0 ? JSON.stringify(markets) : null;
     db.prepare('INSERT INTO invest_platforms (id, name, market, currency, createdAt, note) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(id, name, market, currency, createdAt, note || null);
+      .run(id, name, mJson, currency, createdAt, note || null);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -309,10 +324,16 @@ app.post('/api/invest/platforms', (req, res) => {
 app.put('/api/invest/platforms/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    const body = { ...req.body };
+    // 数组字段序列化为 JSON 字符串存储
+    if (Array.isArray(body.markets)) {
+      body.market = body.markets.length > 0 ? JSON.stringify(body.markets) : null;
+      delete body.markets;
+    }
+    const fields = Object.keys(body).filter(k => k !== 'id');
     if (fields.length === 0) return res.json({ success: true });
     const setClause = fields.map(k => `${k} = ?`).join(', ');
-    const values = fields.map(k => req.body[k]);
+    const values = fields.map(k => body[k]);
     db.prepare(`UPDATE invest_platforms SET ${setClause} WHERE id = ?`).run(...values, id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
