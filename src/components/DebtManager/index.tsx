@@ -158,7 +158,7 @@ export default function DebtManager() {
       title: '债务名称',
       dataIndex: 'name',
       key: 'name',
-      width: 200,
+      ellipsis: true,
       render: (text: string, record: any) => (
         <div>
           <div style={{ fontWeight: 500, marginBottom: 4, fontSize: FONT.tableCell }}>{text}</div>
@@ -180,22 +180,20 @@ export default function DebtManager() {
       sorter: (a: any, b: any) => a.remainingAmount - b.remainingAmount
     },
     {
-      title: '总额度',
-      dataIndex: 'creditLimit',
-      key: 'creditLimit',
-      render: (val: number) => val ? <span style={{ fontSize: FONT.tableCell }}>¥{formatMoney(val)}</span> : '-',
-      sorter: (a: any, b: any) => (a.creditLimit || 0) - (b.creditLimit || 0)
-    },
-    {
-      title: '使用率',
-      key: 'usageRate',
-      width: 100,
+      title: '额度使用',
+      key: 'creditInfo',
       render: (_: any, record: any) => {
-        if (!record.creditLimit) return '-';
+        if (!record.creditLimit) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>;
         const rate = (record.remainingAmount / record.creditLimit) * 100;
         const color = rate >= 90 ? COLORS.danger : rate >= 70 ? COLORS.warning : COLORS.success;
-        return <span style={{ color, fontSize: FONT.tableCell, fontWeight: 500 }}>{rate.toFixed(1)}%</span>;
-      }
+        return (
+          <div>
+            <div style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>¥{formatMoney(record.creditLimit)}</div>
+            <div style={{ color, fontSize: FONT.caption, fontWeight: 500 }}>{rate.toFixed(1)}% 已用</div>
+          </div>
+        );
+      },
+      sorter: (a: any, b: any) => (a.creditLimit || 0) - (b.creditLimit || 0)
     },
     {
       title: '年利率',
@@ -208,7 +206,6 @@ export default function DebtManager() {
     {
       title: '还款日',
       key: 'dueDates',
-      width: 140,
       render: (_: any, record: any) => {
         const parts: string[] = [];
         if (record.dueDate) parts.push(`出账${record.dueDate}日`);
@@ -220,7 +217,6 @@ export default function DebtManager() {
       title: '操作',
       key: 'action',
       width: 120,
-      fixed: 'right' as const,
       render: (_: any, record: any) => (
         <Space size={0}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
@@ -279,7 +275,6 @@ export default function DebtManager() {
             showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
           }}
           size="middle"
-          scroll={{ x: 1000 }}
         />
       )}
 
