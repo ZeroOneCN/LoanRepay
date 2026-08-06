@@ -21,7 +21,8 @@
 | UI 组件库 | Ant Design 5 |
 | 图表 | ECharts 5 (echarts-for-react) |
 | 构建工具 | Vite 5 |
-| 数据持久化 | localStorage（前端存储，无需数据库） |
+| 数据持久化 | SQLite（better-sqlite3，Express 后端服务） |
+| 后端服务 | Express 5 |
 | Excel 处理 | SheetJS (xlsx) |
 | 日期处理 | dayjs |
 
@@ -38,7 +39,10 @@
 # 安装依赖
 npm install
 
-# 启动开发服务器
+# 启动后端服务（SQLite 数据库，端口 3001）
+npm run server
+
+# 启动前端开发服务器（另一个终端）
 npm run dev
 
 # 构建生产版本
@@ -48,7 +52,9 @@ npm run build
 npm run preview
 ```
 
-开发服务器启动后访问 `http://localhost:5173`。
+- 前端开发服务器：`http://localhost:5173`
+- 后端 API 服务：`http://localhost:3001`
+- 数据库文件：`data/loan.db`（自动创建）
 
 ## 项目结构
 
@@ -126,9 +132,10 @@ src/
 
 ### 数据管理
 
-- 所有数据存储在浏览器 localStorage 中，无需后端服务
+- 所有数据存储在 SQLite 数据库中（`data/loan.db`），通过 Express 后端 API 读写
 - 支持通过 Excel 批量导入债务（含模板下载、重复检测）
 - 支持导出全部债务数据为 Excel 文件
+- 支持快速还款扣减，无需编辑债务即可记录部分还款或还清
 
 ## 许可证
 

@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo } from 'react';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Dropdown, Input as AntInput, Grid } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
+import { TransactionOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType } from '../../types';
 import { formatMoney, calculateMonthlyInterest } from '../../utils/repaymentEngine';
@@ -38,6 +39,8 @@ export default function DebtManager() {
   const [importLoading, setImportLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
+  const [repayModal, setRepayModal] = useState<{ visible: boolean; debtId: string; debtName: string; remaining: number }>({ visible: false, debtId: '', debtName: '', remaining: 0 });
+  const [repayAmount, setRepayAmount] = useState<number>(0);
   const [form] = Form.useForm<DebtFormValues>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const screens = useBreakpoint();
@@ -157,6 +160,24 @@ export default function DebtManager() {
     } catch (e) { console.error('Form validation failed:', e); }
   };
 
+  const handleRepay = (record: any) => {
+    setRepayModal({ visible: true, debtId: record.id, debtName: record.name, remaining: record.remainingAmount });
+    setRepayAmount(0);
+  };
+
+  const handleRepaySubmit = async () => {
+    if (repayAmount <= 0) { message.warning('请输入有效还款金额'); return; }
+    if (repayAmount > repayModal.remaining) { message.warning('还款金额不能超过剩余金额'); return; }
+    const newRemaining = repayModal.remaining - repayAmount;
+    await updateDebt(repayModal.debtId, { remainingAmount: newRemaining });
+    if (newRemaining === 0) {
+      message.success(`「${repayModal.debtName}」已还清`);
+    } else {
+      message.success(`「${repayModal.debtName}」还款成功，剩余 ¥${formatMoney(newRemaining)}`);
+    }
+    setRepayModal({ ...repayModal, visible: false });
+  };
+
   const totalCreditLimit = debts.reduce((sum, d) => sum + (d.creditLimit || 0), 0);
   const totalAvailable = totalCreditLimit - totalDebt;
 
@@ -245,9 +266,10 @@ export default function DebtManager() {
     {
       title: '操作',
       key: 'action',
-      width: 140,
+      width: 180,
       render: (_: any, record: any) => (
         <Space size={0} wrap={false}>
+          <Button type="link" size="small" icon={<TransactionOutlined />} onClick={() => handleRepay(record)}>还款</Button>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
@@ -380,6 +402,7 @@ export default function DebtManager() {
               </div>
               {/* 操作行 */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 0, marginTop: SPACING.sm, borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACING.sm }}>
+                <Button type="link" size="small" icon={<TransactionOutlined />} onClick={() => handleRepay(item)}>还款</Button>
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>
                 <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(item.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
@@ -489,6 +512,51 @@ export default function DebtManager() {
           <Form.Item name="note" label="备注">
             <Input.TextArea rows={2} placeholder="可选" />
           </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 还款扣减 Modal */}
+      <Modal
+        title="还款扣减"
+        open={repayModal.visible}
+        onOk={handleRepaySubmit}
+        onCancel={() => setRepayModal({ ...repayModal, visible: false })}
+        okText="确认还款"
+        cancelText="取消"
+        width={440}
+        maskClosable={false}
+      >
+        <div style={{ marginBottom: SPACING.lg }}>
+          <div style={{ fontSize: FONT.bodySmall, color: COLORS.textSecondary, marginBottom: SPACING.sm }}>
+            债务：{repayModal.debtName}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: SPACING.md, background: COLORS.bgLight, borderRadius: 6 }}>
+            <span style={{ fontSize: FONT.bodySmall, color: COLORS.textSecondary }}>当前剩余金额</span>
+            <span style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.danger }}>¥{formatMoney(repayModal.remaining)}</span>
+          </div>
+        </div>
+        <Form layout="vertical">
+          <Form.Item label="本次还款金额（元）" required>
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0}
+              max={repayModal.remaining}
+              value={repayAmount}
+              onChange={(v) => setRepayAmount(v ?? 0)}
+              placeholder="输入还款金额"
+            />
+          </Form.Item>
+          <Space>
+            <Button size="small" onClick={() => setRepayAmount(repayModal.remaining)}>全额还清</Button>
+            <Button size="small" onClick={() => setRepayAmount(Math.round(repayModal.remaining * 0.1 * 100) / 100)}>还最低（10%）</Button>
+            <Button size="small" onClick={() => setRepayAmount(Math.round(repayModal.remaining * 0.5 * 100) / 100)}>还一半</Button>
+          </Space>
+          {repayAmount > 0 && (
+            <div style={{ marginTop: SPACING.md, padding: SPACING.md, background: COLORS.bgPrimaryLight, borderRadius: 6, fontSize: FONT.bodySmall }}>
+              还款后剩余：<strong style={{ color: COLORS.primary, fontSize: FONT.body }}>¥{formatMoney(repayModal.remaining - repayAmount)}</strong>
+              {repayModal.remaining - repayAmount === 0 && <span style={{ marginLeft: SPACING.sm, color: COLORS.success, fontWeight: 500 }}>（已还清）</span>}
+            </div>
+          )}
         </Form>
       </Modal>
     </div>
