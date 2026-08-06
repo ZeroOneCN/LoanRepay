@@ -1,64 +1,40 @@
 import { useState } from 'react';
-import { Layout, Menu, Space, Typography } from 'antd';
+import { HashRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Layout, Menu, Space } from 'antd';
 import {
   DashboardOutlined,
   WalletOutlined,
   BankOutlined,
-  MoneyCollectOutlined,
   ThunderboltOutlined,
-  SwapOutlined,
   MenuUnfoldOutlined,
   MenuFoldOutlined
 } from '@ant-design/icons';
 import { AppProvider } from './context/AppContext';
 import Dashboard from './components/Dashboard';
-import DebtManager from './components/DebtManager';
-import AssetManager from './components/AssetManager';
-import IncomeManager from './components/IncomeManager';
-import PlanEngine from './components/PlanEngine';
-import DebtRestructure from './components/DebtRestructure';
+import DebtCenter from './components/DebtCenter';
+import FinanceCenter from './components/FinanceCenter';
+import StrategyCenter from './components/StrategyCenter';
 import { COLORS, FONT, FONT_WEIGHT, SPACING } from './styles/theme';
 
 const { Header, Sider, Content } = Layout;
-const { Text } = Typography;
-
-type MenuKey = 'dashboard' | 'debt' | 'asset' | 'income' | 'plan' | 'restructure';
 
 const MENU_ITEMS = [
-  { key: 'dashboard', icon: <DashboardOutlined />, label: '财务总览' },
-  { key: 'debt', icon: <WalletOutlined />, label: '债务管理' },
-  { key: 'asset', icon: <BankOutlined />, label: '资产管理' },
-  { key: 'income', icon: <MoneyCollectOutlined />, label: '收入支出' },
-  { key: 'plan', icon: <ThunderboltOutlined />, label: '还款规划' },
-  { key: 'restructure', icon: <SwapOutlined />, label: '债务重组' },
+  { key: '/dashboard', icon: <DashboardOutlined />, label: '财务总览' },
+  { key: '/debt', icon: <WalletOutlined />, label: '债务中心' },
+  { key: '/finance', icon: <BankOutlined />, label: '资产负债' },
+  { key: '/strategy', icon: <ThunderboltOutlined />, label: '还款策略' },
 ];
 
 function AppContent() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
-  const [activeKey, setActiveKey] = useState<MenuKey>(() => {
-    const saved = localStorage.getItem('active_page');
-    if (saved && MENU_ITEMS.some(m => m.key === saved)) {
-      return saved as MenuKey;
-    }
-    return 'dashboard';
-  });
 
-  const handleMenuClick = (key: MenuKey) => {
-    setActiveKey(key);
-    localStorage.setItem('active_page', key);
-  };
-
-  const renderContent = () => {
-    switch (activeKey) {
-      case 'dashboard': return <Dashboard />;
-      case 'debt': return <DebtManager />;
-      case 'asset': return <AssetManager />;
-      case 'income': return <IncomeManager />;
-      case 'plan': return <PlanEngine />;
-      case 'restructure': return <DebtRestructure />;
-      default: return <Dashboard />;
-    }
-  };
+  const activeKey = (() => {
+    const path = location.pathname;
+    const topRoute = '/' + path.split('/')[1];
+    return MENU_ITEMS.some(m => m.key === topRoute) ? topRoute : '/dashboard';
+  })();
 
   const currentLabel = MENU_ITEMS.find(m => m.key === activeKey)?.label || '';
 
@@ -71,7 +47,6 @@ function AppContent() {
         theme="light"
         style={{ height: '100vh', overflowY: 'auto', borderRight: `1px solid ${COLORS.border}` }}
       >
-        {/* Logo 区域 */}
         <div style={{
           height: 56,
           display: 'flex',
@@ -92,12 +67,11 @@ function AppContent() {
           mode="inline"
           selectedKeys={[activeKey]}
           items={MENU_ITEMS}
-          onClick={({ key }) => handleMenuClick(key as MenuKey)}
+          onClick={({ key }) => navigate(key)}
           style={{ borderRight: 0 }}
         />
       </Sider>
       <Layout style={{ height: '100vh', overflow: 'hidden' }}>
-        {/* 顶栏 */}
         <Header style={{
           padding: `0 ${SPACING.xl}px`,
           background: COLORS.bgCard,
@@ -110,44 +84,44 @@ function AppContent() {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
             {collapsed ? (
-              <MenuUnfoldOutlined
-                onClick={() => setCollapsed(false)}
-                style={{ fontSize: 18, cursor: 'pointer', color: COLORS.textSecondary }}
-              />
+              <MenuUnfoldOutlined onClick={() => setCollapsed(false)} style={{ fontSize: 18, cursor: 'pointer', color: COLORS.textSecondary }} />
             ) : (
-              <MenuFoldOutlined
-                onClick={() => setCollapsed(true)}
-                style={{ fontSize: 18, cursor: 'pointer', color: COLORS.textSecondary }}
-              />
+              <MenuFoldOutlined onClick={() => setCollapsed(true)} style={{ fontSize: 18, cursor: 'pointer', color: COLORS.textSecondary }} />
             )}
-            <Text style={{ fontSize: FONT.h2, fontWeight: FONT_WEIGHT.semiBold, color: COLORS.textPrimary, margin: 0 }}>
+            <span style={{ fontSize: FONT.h2, fontWeight: FONT_WEIGHT.semiBold, color: COLORS.textPrimary, margin: 0 }}>
               {currentLabel}
-            </Text>
+            </span>
+            <span style={{ fontSize: FONT.bodySmall, color: COLORS.textTertiary, marginLeft: SPACING.sm }}>
+              {location.pathname}
+            </span>
           </div>
-          <Text style={{ fontSize: FONT.bodySmall, color: COLORS.textTertiary }}>
-            还款管家
-          </Text>
+          <span style={{ fontSize: FONT.bodySmall, color: COLORS.textTertiary }}>还款管家</span>
         </Header>
-        {/* 内容区 */}
         <Content style={{
           padding: SPACING.xl,
           flex: 1,
           overflowY: 'auto',
           background: COLORS.bgPage,
         }}>
-          {renderContent()}
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/debt/*" element={<DebtCenter />} />
+            <Route path="/finance/*" element={<FinanceCenter />} />
+            <Route path="/strategy/*" element={<StrategyCenter />} />
+            <Route path="*" element={<Dashboard />} />
+          </Routes>
         </Content>
       </Layout>
     </Layout>
   );
 }
 
-function App() {
+export default function App() {
   return (
     <AppProvider>
-      <AppContent />
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
     </AppProvider>
   );
 }
-
-export default App;

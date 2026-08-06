@@ -127,3 +127,28 @@ export const RESTRUCTURE_TYPE_LABELS: Record<RestructureType, string> = {
   borrow_new: '借新还旧',
   minimum_roll: '最低还款滚动'
 };
+
+// ==================== 交易记录 ====================
+
+export type TransactionType = 'create' | 'repay' | 'adjust' | 'delete';
+
+export const TRANSACTION_TYPE_LABELS: Record<TransactionType, string> = {
+  create: '新增债务',
+  repay: '还款',
+  adjust: '编辑调整',
+  delete: '删除债务'
+};
+
+export interface Transaction {
+  id: string;
+  debt_id: string;
+  debt_name: string;
+  type: TransactionType;
+  amount: number;
+  interest_portion: number;
+  principal_portion: number;
+  remaining_after: number;
+  interest_rate?: number;
+  created_at: string;
+  note?: string;
+}

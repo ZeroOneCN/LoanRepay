@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Debt, Asset, IncomeConfig, RepaymentStrategy } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction } from '../types';
 import {
   initDatabase,
   getAllDebts,
@@ -15,12 +15,16 @@ import {
   getStrategy,
   saveStrategy,
   getTargetDate,
-  saveTargetDate
+  saveTargetDate,
+  getAllTransactions,
+  addTransaction as dbAddTransaction,
 } from '../services/database';
+import { calculateMonthlyInterest } from '../utils/repaymentEngine';
 
 interface AppState {
   debts: Debt[];
   assets: Asset[];
+  transactions: Transaction[];
   incomeConfig: IncomeConfig;
   strategy: RepaymentStrategy;
   targetDate: string;
@@ -54,27 +58,44 @@ const defaultIncomeConfig: IncomeConfig = {
 export function AppProvider({ children }: { children: ReactNode }) {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [incomeConfig, setIncomeConfig] = useState<IncomeConfig>(defaultIncomeConfig);
   const [strategy, setStrategyState] = useState<RepaymentStrategy>('avalanche');
   const [targetDate, setTargetDateState] = useState<string>('');
   const [dbReady, setDbReady] = useState(false);
 
+  const recordTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
+    const fullTx: Transaction = {
+      ...tx,
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      created_at: new Date().toISOString()
+    };
+    setTransactions(prev => [fullTx, ...prev]);
+    try {
+      await dbAddTransaction(fullTx);
+    } catch (e) {
+      console.error('Failed to record transaction:', e);
+    }
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
         await initDatabase();
-        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate] = await Promise.all([
+        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx] = await Promise.all([
           getAllDebts(),
           getAllAssets(),
           getIncomeConfig(),
           getStrategy(),
-          getTargetDate()
+          getTargetDate(),
+          getAllTransactions()
         ]);
         setDebts(loadedDebts);
         setAssets(loadedAssets);
         setIncomeConfig(loadedIncome || defaultIncomeConfig);
         setStrategyState(loadedStrategy);
         setTargetDateState(loadedTargetDate);
+        setTransactions(loadedTx);
         setDbReady(true);
       } catch (e) {
         console.error('Failed to load data from SQLite:', e);
@@ -93,24 +114,88 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDebts(prev => [...prev, newDebt]);
     try {
       await dbAddDebt(newDebt);
+      await recordTransaction({
+        debt_id: newDebt.id,
+        debt_name: newDebt.name,
+        type: 'create',
+        amount: newDebt.remainingAmount,
+        interest_portion: 0,
+        principal_portion: 0,
+        remaining_after: newDebt.remainingAmount,
+        interest_rate: newDebt.interestRate,
+        note: '新增债务'
+      });
     } catch (e) {
       console.error('Failed to add debt to DB:', e);
     }
   };
 
   const updateDebt = async (id: string, updates: Partial<Debt>) => {
+    const oldDebt = debts.find(d => d.id === id);
     setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     try {
       await dbUpdateDebt(id, updates);
+      // 仅当金额变动时记录交易
+      if (oldDebt && updates.remainingAmount !== undefined && updates.remainingAmount !== oldDebt.remainingAmount) {
+        const diff = updates.remainingAmount - oldDebt.remainingAmount;
+        const isRepay = diff < 0;
+        const changeAmount = Math.abs(diff);
+        // 利息拆分：如果是还款（金额减少），按月利息拆分
+        let interestPortion = 0;
+        let principalPortion = changeAmount;
+        if (isRepay && oldDebt.interestRate) {
+          const monthlyInterest = calculateMonthlyInterest(oldDebt.remainingAmount, oldDebt.interestRate);
+          interestPortion = Math.min(changeAmount, monthlyInterest);
+          principalPortion = changeAmount - interestPortion;
+        }
+        await recordTransaction({
+          debt_id: id,
+          debt_name: updates.name || oldDebt.name,
+          type: isRepay ? 'repay' : 'adjust',
+          amount: changeAmount,
+          interest_portion: interestPortion,
+          principal_portion: principalPortion,
+          remaining_after: updates.remainingAmount,
+          interest_rate: updates.interestRate ?? oldDebt.interestRate,
+          note: isRepay ? '还款扣减' : '手动调整'
+        });
+      } else if (oldDebt && (updates.interestRate !== undefined || updates.creditLimit !== undefined || updates.name !== undefined)) {
+        // 非金额变动的编辑也记录
+        await recordTransaction({
+          debt_id: id,
+          debt_name: updates.name || oldDebt.name,
+          type: 'adjust',
+          amount: 0,
+          interest_portion: 0,
+          principal_portion: 0,
+          remaining_after: updates.remainingAmount ?? oldDebt.remainingAmount,
+          interest_rate: updates.interestRate ?? oldDebt.interestRate,
+          note: '编辑债务信息'
+        });
+      }
     } catch (e) {
       console.error('Failed to update debt in DB:', e);
     }
   };
 
   const deleteDebt = async (id: string) => {
+    const debt = debts.find(d => d.id === id);
     setDebts(prev => prev.filter(d => d.id !== id));
     try {
       await dbDeleteDebt(id);
+      if (debt) {
+        await recordTransaction({
+          debt_id: id,
+          debt_name: debt.name,
+          type: 'delete',
+          amount: debt.remainingAmount,
+          interest_portion: 0,
+          principal_portion: debt.remainingAmount,
+          remaining_after: 0,
+          interest_rate: debt.interestRate,
+          note: '删除债务'
+        });
+      }
     } catch (e) {
       console.error('Failed to delete debt from DB:', e);
     }
@@ -188,6 +273,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider value={{
       debts,
       assets,
+      transactions,
       incomeConfig,
       strategy,
       targetDate,

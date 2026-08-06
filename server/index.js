@@ -67,6 +67,22 @@ db.exec(`
   )
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS transactions (
+    id TEXT PRIMARY KEY,
+    debt_id TEXT NOT NULL,
+    debt_name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    interest_portion REAL NOT NULL DEFAULT 0,
+    principal_portion REAL NOT NULL DEFAULT 0,
+    remaining_after REAL NOT NULL DEFAULT 0,
+    interest_rate REAL,
+    created_at TEXT NOT NULL,
+    note TEXT
+  )
+`);
+
 const getDebtRow = (row) => row;
 
 const getAssetRow = (row) => row;
@@ -173,6 +189,49 @@ app.get('/api/config/:key', (req, res) => {
 app.post('/api/config/:key', (req, res) => {
   try {
     db.prepare(`INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)`).run(req.params.key, req.body.value);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==================== 交易记录相关 ====================
+
+app.get('/api/transactions', (req, res) => {
+  try {
+    const { debtId, type, startDate, endDate } = req.query;
+    let sql = 'SELECT * FROM transactions';
+    const conditions = [];
+    const params = [];
+    if (debtId) { conditions.push('debt_id = ?'); params.push(debtId); }
+    if (type) { conditions.push('type = ?'); params.push(type); }
+    if (startDate) { conditions.push('created_at >= ?'); params.push(startDate); }
+    if (endDate) { conditions.push('created_at <= ?'); params.push(endDate); }
+    if (conditions.length > 0) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY created_at DESC';
+    const rows = db.prepare(sql).all(...params);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/transactions', (req, res) => {
+  try {
+    const { id, debt_id, debt_name, type, amount, interest_portion, principal_portion, remaining_after, interest_rate, created_at, note } = req.body;
+    db.prepare(`
+      INSERT INTO transactions (id, debt_id, debt_name, type, amount, interest_portion, principal_portion, remaining_after, interest_rate, created_at, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, debt_id, debt_name, type, amount || 0, interest_portion || 0, principal_portion || 0, remaining_after || 0, interest_rate ?? null, created_at, note || null);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/transactions/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

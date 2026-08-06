@@ -1,4 +1,4 @@
-import { Debt, Asset, IncomeConfig, RepaymentStrategy } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction } from '../types';
 
 const API_BASE = '/api';
 
@@ -123,4 +123,41 @@ export async function exportDatabase(): Promise<Uint8Array> {
 
 export async function importDatabase(data: Uint8Array): Promise<void> {
   throw new Error('Import not supported in API mode');
+}
+
+// ==================== 交易记录相关操作 ====================
+
+export async function getAllTransactions(filters?: { debtId?: string; type?: string }): Promise<Transaction[]> {
+  const params = new URLSearchParams();
+  if (filters?.debtId) params.set('debtId', filters.debtId);
+  if (filters?.type) params.set('type', filters.type);
+  const query = params.toString() ? `?${params.toString()}` : '';
+  const rows = await fetchApi(`${API_BASE}/transactions${query}`);
+  return rows.map((r: any) => ({
+    id: r.id,
+    debt_id: r.debt_id,
+    debt_name: r.debt_name,
+    type: r.type,
+    amount: r.amount,
+    interest_portion: r.interest_portion,
+    principal_portion: r.principal_portion,
+    remaining_after: r.remaining_after,
+    interest_rate: r.interest_rate ?? undefined,
+    created_at: r.created_at,
+    note: r.note ?? undefined,
+  }));
+}
+
+export async function addTransaction(transaction: Transaction): Promise<void> {
+  await fetchApi(`${API_BASE}/transactions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(transaction)
+  });
+}
+
+export async function deleteTransaction(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/transactions/${id}`, {
+    method: 'DELETE'
+  });
 }
