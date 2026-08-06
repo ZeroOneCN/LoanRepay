@@ -199,7 +199,7 @@ export interface InvestAccount {
   platformId: string;
   name: string;
   currency: Currency;            // 账户记账币种（默认继承平台）
-  productType?: ProductType;      // 仅 crypto 平台用：合约/现货
+  productTypes?: ProductType[];   // 仅 crypto 平台用：可同时选现货/合约
   note?: string;
   createdAt: string;
 }

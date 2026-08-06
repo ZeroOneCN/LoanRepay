@@ -328,6 +328,20 @@ app.delete('/api/invest/platforms/:id', (req, res) => {
 });
 
 // 账户
+// 注：productTypes 以 JSON 字符串存储在 invest_accounts.productType 列中
+function parseAccountRow(row) {
+  if (!row) return row;
+  let pts = row.productType;
+  if (typeof pts === 'string' && pts.length > 0) {
+    try { pts = JSON.parse(pts); } catch (e) { pts = null; }
+  } else {
+    pts = null;
+  }
+  // 兼容老的单值字符串（'spot' / 'futures'）
+  if (typeof pts === 'string') pts = [pts];
+  return { ...row, productTypes: Array.isArray(pts) ? pts : (pts ? [pts] : undefined) };
+}
+
 app.get('/api/invest/accounts', (req, res) => {
   try {
     const { platformId } = req.query;
@@ -335,16 +349,17 @@ app.get('/api/invest/accounts', (req, res) => {
     const params = [];
     if (platformId) { sql += ' WHERE platformId = ?'; params.push(platformId); }
     sql += ' ORDER BY createdAt DESC';
-    const rows = db.prepare(sql).all(...params);
+    const rows = db.prepare(sql).all(...params).map(parseAccountRow);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.post('/api/invest/accounts', (req, res) => {
   try {
-    const { id, platformId, name, currency, productType, note, createdAt } = req.body;
+    const { id, platformId, name, currency, productTypes, note, createdAt } = req.body;
+    const ptJson = Array.isArray(productTypes) && productTypes.length > 0 ? JSON.stringify(productTypes) : null;
     db.prepare('INSERT INTO invest_accounts (id, platformId, name, currency, productType, note, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(id, platformId, name, currency, productType || null, note || null, createdAt);
+      .run(id, platformId, name, currency, ptJson, note || null, createdAt);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -352,10 +367,16 @@ app.post('/api/invest/accounts', (req, res) => {
 app.put('/api/invest/accounts/:id', (req, res) => {
   try {
     const { id } = req.params;
-    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    const body = { ...req.body };
+    // 数组字段序列化为 JSON 字符串存储
+    if (Array.isArray(body.productTypes)) {
+      body.productType = body.productTypes.length > 0 ? JSON.stringify(body.productTypes) : null;
+      delete body.productTypes;
+    }
+    const fields = Object.keys(body).filter(k => k !== 'id');
     if (fields.length === 0) return res.json({ success: true });
     const setClause = fields.map(k => `${k} = ?`).join(', ');
-    const values = fields.map(k => req.body[k]);
+    const values = fields.map(k => body[k]);
     db.prepare(`UPDATE invest_accounts SET ${setClause} WHERE id = ?`).run(...values, id);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

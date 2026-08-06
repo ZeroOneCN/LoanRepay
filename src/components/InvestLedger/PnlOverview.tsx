@@ -24,13 +24,16 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
 
   // 按账户汇总（CNY 口径），同时包含所属平台
   const byAccount = useMemo(() => {
-    const map = new Map<string, { name: string; platformName: string; market: InvestMarket; productType?: ProductType; pnlCNY: number; recordCount: number }>();
+    const map = new Map<string, { name: string; platformName: string; market: InvestMarket; productTypes?: ProductType[]; pnlCNY: number; recordCount: number }>();
     pnlRecords.forEach(r => {
       const acc = accounts.find(a => a.id === r.accountId);
       const pf = platforms.find(p => p.id === r.platformId) || platforms.find(p => p.id === acc?.platformId);
       const key = acc?.id || r.platformId || 'unknown';
       const accName = acc?.name || (pf ? `${pf.name}（旧数据）` : '未知账户');
-      const existing = map.get(key) || { name: accName, platformName: pf?.name || '未知', market: (pf?.market || 'other') as InvestMarket, productType: acc?.productType, pnlCNY: 0, recordCount: 0 };
+      // 兼容老的单值 productType 字段
+      let pts = acc?.productTypes;
+      if (!pts && (acc as any)?.productType) pts = [(acc as any).productType];
+      const existing = map.get(key) || { name: accName, platformName: pf?.name || '未知', market: (pf?.market || 'other') as InvestMarket, productTypes: pts, pnlCNY: 0, recordCount: 0 };
       existing.pnlCNY += convertToCNY(r.pnl, r.currency);
       existing.recordCount += 1;
       map.set(key, existing);
@@ -197,11 +200,11 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
                 </div>
                 <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginBottom: SPACING.md }}>
                   {a.platformName}
-                  {a.productType && (
-                    <Tag color={a.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 6 }}>
-                      {PRODUCT_TYPE_LABELS[a.productType]}
+                  {a.productTypes && a.productTypes.length > 0 && a.productTypes.map(pt => (
+                    <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 6 }}>
+                      {PRODUCT_TYPE_LABELS[pt]}
                     </Tag>
-                  )}
+                  ))}
                   <span style={{ marginLeft: 6 }}>· {a.recordCount} 条记录</span>
                 </div>
                 <div style={{

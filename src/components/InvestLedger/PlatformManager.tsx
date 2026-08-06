@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Tabs, Table, Button, Modal, Form, Input, Select, Popconfirm, Tag, message } from 'antd';
+import { Tabs, Table, Button, Modal, Form, Input, Select, Popconfirm, Tag, Checkbox, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { InvestMarket, INVEST_MARKET_LABELS, Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
@@ -17,6 +17,17 @@ const productColor: Record<ProductType, string> = {
   spot: 'green', futures: 'magenta'
 };
 
+function ProductTypeTags({ types }: { types?: ProductType[] }) {
+  if (!types || types.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>-</span>;
+  return (
+    <span>
+      {types.map(t => (
+        <Tag key={t} color={productColor[t]} style={{ marginRight: 4 }}>{PRODUCT_TYPE_LABELS[t]}</Tag>
+      ))}
+    </span>
+  );
+}
+
 interface PlatformFormValues {
   name: string;
   market: InvestMarket;
@@ -28,7 +39,7 @@ interface AccountFormValues {
   platformId: string;
   name: string;
   currency: Currency;
-  productType?: ProductType;
+  productTypes?: ProductType[];
   note?: string;
 }
 
@@ -87,17 +98,20 @@ export default function PlatformManager() {
     aForm.setFieldsValue({
       platformId: defaultPid,
       currency: defaultPf?.currency || 'USDT',
-      productType: defaultPf?.market === 'crypto' ? 'spot' : undefined,
+      productTypes: defaultPf?.market === 'crypto' ? ['spot'] : undefined,
     });
     setAModalOpen(true);
   };
   const openEditA = (record: any) => {
     setAEditingId(record.id);
+    // 兼容老的 productType（单值字符串）
+    let pts = record.productTypes;
+    if (!pts && record.productType) pts = [record.productType];
     aForm.setFieldsValue({
       platformId: record.platformId,
       name: record.name,
       currency: record.currency,
-      productType: record.productType,
+      productTypes: Array.isArray(pts) ? pts : (pts ? [pts] : undefined),
       note: record.note,
     });
     setAModalOpen(true);
@@ -108,11 +122,15 @@ export default function PlatformManager() {
       if (!values.name?.trim()) { message.warning('请输入账户名称'); return; }
       if (!values.platformId) { message.warning('请选择所属平台'); return; }
       const pf = platforms.find(p => p.id === values.platformId);
+      const isCrypto = pf?.market === 'crypto';
+      if (isCrypto && (!values.productTypes || values.productTypes.length === 0)) {
+        message.warning('请选择类型（现货/合约）'); return;
+      }
       const data = {
         platformId: values.platformId,
         name: values.name.trim(),
         currency: values.currency,
-        productType: pf?.market === 'crypto' ? values.productType : undefined,
+        productTypes: isCrypto ? values.productTypes : undefined,
         note: values.note,
       };
       if (aEditingId) { await updateAccount(aEditingId, data); message.success('更新成功'); }
@@ -189,8 +207,13 @@ export default function PlatformManager() {
     },
     { title: '市场', key: 'market', width: 110, render: (_: any, r: any) => { const pf = platforms.find(p => p.id === r.platformId); return pf ? <Tag color={marketColor[pf.market]}>{INVEST_MARKET_LABELS[pf.market]}</Tag> : '-'; } },
     {
-      title: '类型', key: 'productType', width: 90,
-      render: (_: any, r: any) => r.productType ? <Tag color={productColor[r.productType as ProductType]}>{PRODUCT_TYPE_LABELS[r.productType as ProductType]}</Tag> : <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>-</span>
+      title: '类型', key: 'productType', width: 120,
+      render: (_: any, r: any) => {
+        // 兼容老的单值 productType 字段
+        let pts = r.productTypes;
+        if (!pts && r.productType) pts = [r.productType];
+        return <ProductTypeTags types={Array.isArray(pts) ? pts : (pts ? [pts] : undefined)} />;
+      }
     },
     { title: '币种', dataIndex: 'currency', key: 'currency', width: 90, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
     {
@@ -303,14 +326,14 @@ export default function PlatformManager() {
             <Select placeholder="选择所属平台" onChange={(pid) => {
               const pf = platforms.find(p => p.id === pid);
               if (pf) {
-                aForm.setFieldsValue({ currency: pf.currency, productType: pf.market === 'crypto' ? 'spot' : undefined });
+                aForm.setFieldsValue({ currency: pf.currency, productTypes: pf.market === 'crypto' ? ['spot'] : undefined });
               }
             }}>
               {platforms.map(p => <Option key={p.id} value={p.id}>{p.name}（{INVEST_MARKET_LABELS[p.market]}）</Option>)}
             </Select>
           </Form.Item>
           <Form.Item name="name" label="账户名称" rules={[{ required: true, message: '请输入账户名称' }]}>
-            <Input placeholder="如：现货账户、合约主账户、港股打新账户" />
+            <Input placeholder="如：主账户、BTC 长线账户、港股打新账户" />
           </Form.Item>
           <Form.Item name="currency" label="记账币种" rules={[{ required: true, message: '请选择币种' }]}>
             <Select>
@@ -318,11 +341,18 @@ export default function PlatformManager() {
             </Select>
           </Form.Item>
           {currentPlatformMarket === 'crypto' && (
-            <Form.Item name="productType" label="类型（加密平台）" tooltip="加密货币才需要区分：现货 / 合约" rules={[{ required: true, message: '请选择类型' }]}>
-              <Select>
-                <Option value="spot">现货</Option>
-                <Option value="futures">合约</Option>
-              </Select>
+            <Form.Item
+              name="productTypes"
+              label="类型（可多选）"
+              tooltip="加密平台可同时选择现货和合约，至少选一个"
+              rules={[{ required: true, message: '请选择类型（现货/合约）' }]}
+            >
+              <Checkbox.Group
+                options={[
+                  { label: '现货', value: 'spot' },
+                  { label: '合约', value: 'futures' },
+                ]}
+              />
             </Form.Item>
           )}
           <Form.Item name="note" label="备注"><Input.TextArea rows={2} placeholder="可选，如：BTC 长线、AAPL 持仓" /></Form.Item>

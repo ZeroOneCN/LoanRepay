@@ -143,11 +143,11 @@ export default function PnlRecords() {
           <div>
             <div style={{ fontWeight: 500, fontSize: FONT.tableCell }}>
               {acc?.name || '未知账户'}
-              {acc?.productType && (
-                <Tag color={acc.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 4, marginRight: 0 }}>
-                  {PRODUCT_TYPE_LABELS[acc.productType as ProductType]}
+              {acc?.productTypes && acc.productTypes.length > 0 && acc.productTypes.map(pt => (
+                <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 4, marginRight: 0 }}>
+                  {PRODUCT_TYPE_LABELS[pt as ProductType]}
                 </Tag>
-              )}
+              ))}
             </div>
             <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginTop: 2 }}>
               {pf?.name || '未知平台'}
@@ -281,17 +281,18 @@ export default function PnlRecords() {
             >
               {accountOptionsForSelectedPlatform.map(a => {
                 const pf = platforms.find(p => p.id === a.platformId);
-                const label = `${pf?.name || ''} / ${a.name}${a.productType ? `（${PRODUCT_TYPE_LABELS[a.productType]}）` : ''}`;
+                const pts = a.productTypes || [];
+                const label = `${pf?.name || ''} / ${a.name}${pts.length > 0 ? `（${pts.map(pt => PRODUCT_TYPE_LABELS[pt as ProductType]).join(' + ')}）` : ''}`;
                 return (
                   <Option key={a.id} value={a.id} label={label}>
                     <div>
                       <span style={{ fontWeight: 500 }}>{a.name}</span>
                       <span style={{ color: COLORS.textTertiary, marginLeft: 4, fontSize: FONT.caption }}>{pf?.name}</span>
-                      {a.productType && (
-                        <Tag color={a.productType === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 8 }}>
-                          {PRODUCT_TYPE_LABELS[a.productType]}
+                      {pts.map(pt => (
+                        <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 8 }}>
+                          {PRODUCT_TYPE_LABELS[pt as ProductType]}
                         </Tag>
-                      )}
+                      ))}
                     </div>
                   </Option>
                 );
@@ -302,7 +303,7 @@ export default function PnlRecords() {
             <div style={{ marginTop: -SPACING.sm, marginBottom: SPACING.md, fontSize: FONT.caption, color: COLORS.textSecondary }}>
               所属平台：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{pfOfSelectedAccount.name}</span>
               {' · '}
-              {selectedAccount?.productType && <>类型：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{PRODUCT_TYPE_LABELS[selectedAccount.productType]}</span>{' · '}</>}
+              {selectedAccount?.productTypes && selectedAccount.productTypes.length > 0 && <>类型：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{selectedAccount.productTypes.map(p => PRODUCT_TYPE_LABELS[p]).join(' + ')}</span>{' · '}</>}
               币种：<span style={{ fontWeight: 500, color: COLORS.textPrimary }}>{selectedAccount?.currency || pfOfSelectedAccount.currency}</span>
             </div>
           )}
