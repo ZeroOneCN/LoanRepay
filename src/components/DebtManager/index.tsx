@@ -266,15 +266,15 @@ export default function DebtManager() {
     {
       title: '操作',
       key: 'action',
-      width: 180,
+      width: 160,
       render: (_: any, record: any) => (
-        <Space size={0} wrap={false}>
-          <Button type="link" size="small" icon={<TransactionOutlined />} onClick={() => handleRepay(record)}>还款</Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+          <Button type="link" size="small" onClick={() => handleRepay(record)} style={{ padding: '0 4px' }}>还款</Button>
+          <Button type="link" size="small" onClick={() => handleEdit(record)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+            <Button type="link" size="small" danger style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
-        </Space>
+        </div>
       )
     }
   ];
