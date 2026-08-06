@@ -200,6 +200,8 @@ export default function DebtManager() {
       title: '剩余金额',
       dataIndex: 'remainingAmount',
       key: 'remainingAmount',
+      width: 120,
+      ellipsis: true,
       defaultSortOrder: 'descend' as const,
       render: (val: number) => <span style={{ color: COLORS.danger, fontWeight: 500, fontSize: FONT.tableCell }}>¥{formatMoney(val)}</span>,
       sorter: (a: any, b: any) => a.remainingAmount - b.remainingAmount
@@ -207,6 +209,8 @@ export default function DebtManager() {
     {
       title: '额度使用',
       key: 'creditInfo',
+      width: 130,
+      ellipsis: true,
       render: (_: any, record: any) => {
         if (!record.creditLimit) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>;
         const rate = (record.remainingAmount / record.creditLimit) * 100;
@@ -241,9 +245,9 @@ export default function DebtManager() {
     {
       title: '操作',
       key: 'action',
-      width: 120,
+      width: 140,
       render: (_: any, record: any) => (
-        <Space size={0}>
+        <Space size={0} wrap={false}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
           <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
@@ -252,39 +256,6 @@ export default function DebtManager() {
       )
     }
   ];
-
-  // 行展开：显示完整信息
-  const expandRowRender = (record: any) => {
-    const items: { label: string; value: React.ReactNode }[] = [];
-    if (record.interestRate) {
-      items.push({ label: '月利息', value: <span style={{ color: COLORS.warning }}>¥{formatMoney(calculateMonthlyInterest(record.remainingAmount, record.interestRate))}</span> });
-    }
-    if (record.maturityDate) {
-      items.push({ label: '到期日', value: record.maturityDate });
-    }
-    if (record.dueDate) {
-      items.push({ label: '出账日', value: `每月${record.dueDate}日` });
-    }
-    if (record.lastDueDate) {
-      items.push({ label: '最迟还款日', value: `每月${record.lastDueDate}日` });
-    }
-    if (record.note) {
-      items.push({ label: '备注', value: record.note });
-    }
-
-    if (items.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.bodySmall }}>无额外信息</span>;
-
-    return (
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xl }}>
-        {items.map((item, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
-            <span style={{ fontSize: FONT.bodySmall, color: COLORS.textTertiary }}>{item.label}：</span>
-            <span style={{ fontSize: FONT.bodySmall }}>{item.value}</span>
-          </div>
-        ))}
-      </div>
-    );
-  };
 
   const moreMenuItems = [
     { key: 'template', label: '下载模板', icon: <DownloadOutlined />, onClick: handleDownloadTemplate },
@@ -430,10 +401,6 @@ export default function DebtManager() {
             showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
           }}
           size="middle"
-          expandable={{
-            expandedRowRender: expandRowRender,
-            rowExpandable: (record: any) => !!(record.note || record.maturityDate || record.interestRate || record.dueDate || record.lastDueDate),
-          }}
         />
       )}
 
