@@ -1,18 +1,17 @@
-import { useState } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Upload, Dropdown } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined } from '@ant-design/icons';
+import { useState, useRef, useMemo } from 'react';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Dropdown, Input as AntInput, Grid } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
-import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType, Debt } from '../../types';
-import { formatMoney } from '../../utils/repaymentEngine';
+import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType } from '../../types';
+import { formatMoney, calculateMonthlyInterest } from '../../utils/repaymentEngine';
 import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
-import SectionCard from '../Common/SectionCard';
-import StatisticCard from '../Common/StatisticCard';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
 
 const { Option } = Select;
+const { useBreakpoint } = Grid;
 
 function getRepaymentTypeColor(type: string): string {
   const colorMap: Record<string, string> = { revolving: 'blue', interest_only: 'orange', flexible: 'green' };
@@ -37,7 +36,11 @@ export default function DebtManager() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importLoading, setImportLoading] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
   const [form] = Form.useForm<DebtFormValues>();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const screens = useBreakpoint();
 
   const handleExport = () => {
     if (debts.length === 0) { message.warning('暂无债务数据可导出'); return; }
@@ -116,7 +119,12 @@ export default function DebtManager() {
       };
       reader.readAsArrayBuffer(file);
     } catch { message.error('读取文件失败'); setImportLoading(false); }
-    return false;
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleImport(file);
+    e.target.value = '';
   };
 
   const handleAdd = () => {
@@ -151,7 +159,24 @@ export default function DebtManager() {
 
   const totalCreditLimit = debts.reduce((sum, d) => sum + (d.creditLimit || 0), 0);
   const totalAvailable = totalCreditLimit - totalDebt;
-  const sortedDebts = [...debts].sort((a, b) => b.remainingAmount - a.remainingAmount);
+
+  // 搜索 + 筛选
+  const filteredDebts = useMemo(() => {
+    let result = [...debts];
+    if (searchText.trim()) {
+      const q = searchText.trim().toLowerCase();
+      result = result.filter(d => d.name.toLowerCase().includes(q) || d.type.toLowerCase().includes(q));
+    }
+    if (filterType !== 'all') {
+      result = result.filter(d => d.type === filterType);
+    }
+    return result.sort((a, b) => b.remainingAmount - a.remainingAmount);
+  }, [debts, searchText, filterType]);
+
+  const debtTypes = useMemo(() => {
+    const types = new Set(debts.map(d => d.type));
+    return Array.from(types);
+  }, [debts]);
 
   const columns = [
     {
@@ -228,14 +253,63 @@ export default function DebtManager() {
     }
   ];
 
+  // 行展开：显示完整信息
+  const expandRowRender = (record: any) => {
+    const items: { label: string; value: React.ReactNode }[] = [];
+    if (record.interestRate) {
+      items.push({ label: '月利息', value: <span style={{ color: COLORS.warning }}>¥{formatMoney(calculateMonthlyInterest(record.remainingAmount, record.interestRate))}</span> });
+    }
+    if (record.maturityDate) {
+      items.push({ label: '到期日', value: record.maturityDate });
+    }
+    if (record.dueDate) {
+      items.push({ label: '出账日', value: `每月${record.dueDate}日` });
+    }
+    if (record.lastDueDate) {
+      items.push({ label: '最迟还款日', value: `每月${record.lastDueDate}日` });
+    }
+    if (record.note) {
+      items.push({ label: '备注', value: record.note });
+    }
+
+    if (items.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.bodySmall }}>无额外信息</span>;
+
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.xl }}>
+        {items.map((item, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: SPACING.sm }}>
+            <span style={{ fontSize: FONT.bodySmall, color: COLORS.textTertiary }}>{item.label}：</span>
+            <span style={{ fontSize: FONT.bodySmall }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   const moreMenuItems = [
     { key: 'template', label: '下载模板', icon: <DownloadOutlined />, onClick: handleDownloadTemplate },
-    { key: 'import', label: '导入Excel', icon: <UploadOutlined />, onClick: () => {} },
+    { key: 'import', label: '导入Excel', icon: <UploadOutlined />, onClick: () => fileInputRef.current?.click() },
     { key: 'export', label: '导出数据', icon: <DownloadOutlined />, onClick: handleExport },
   ];
 
+  // 移动端卡片渲染
+  const isMobile = !screens.md;
+
   return (
     <div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+      {importLoading && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div>导入中...</div>
+        </div>
+      )}
+
       <PageHeader
         title="债务管理"
         subtitle={`总负债 ¥${formatMoney(totalDebt)}${totalCreditLimit > 0 ? ` ｜ 额度 ¥${formatMoney(totalCreditLimit)} ｜ 可用 ¥${formatMoney(Math.max(0, totalAvailable))}` : ''}`}
@@ -249,24 +323,105 @@ export default function DebtManager() {
         }
       />
 
-      {/* 隐藏的 Upload，通过 Dropdown 触发 */}
-      <Upload
-        accept=".xlsx,.xls"
-        showUploadList={false}
-        beforeUpload={handleImport}
-        style={{ display: 'none' }}
-        id="debt-import-upload"
-      >
-        <span style={{ display: 'none' }} />
-      </Upload>
-      {importLoading && <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(255,255,255,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div>导入中...</div></div>}
+      {/* 搜索 + 筛选 */}
+      {debts.length > 0 && (
+        <Row gutter={SPACING.sm} style={{ marginBottom: SPACING.lg }}>
+          <Col xs={24} sm={12} md={8}>
+            <AntInput
+              prefix={<SearchOutlined style={{ color: COLORS.textTertiary }} />}
+              placeholder="搜索债务名称或类型"
+              value={searchText}
+              onChange={e => setSearchText(e.target.value)}
+              allowClear
+            />
+          </Col>
+          <Col xs={24} sm={12} md={6}>
+            <Select
+              value={filterType}
+              onChange={setFilterType}
+              style={{ width: '100%' }}
+            >
+              <Option value="all">全部类型</Option>
+              {debtTypes.map(t => <Option key={t} value={t}>{t}</Option>)}
+            </Select>
+          </Col>
+        </Row>
+      )}
 
       {debts.length === 0 ? (
         <EmptyState description="还没有债务记录，点击上方「添加债务」开始管理" actionText="添加债务" onAction={handleAdd} />
+      ) : filteredDebts.length === 0 ? (
+        <EmptyState description="没有匹配的债务记录" />
+      ) : isMobile ? (
+        /* 移动端卡片列表 */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.sm }}>
+          {filteredDebts.map((item: any) => (
+            <div
+              key={item.id}
+              style={{
+                background: COLORS.bgCard,
+                borderRadius: 8,
+                padding: SPACING.lg,
+                border: `1px solid ${COLORS.border}`,
+              }}
+            >
+              {/* 标题行 */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: SPACING.sm }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: FONT.body, marginBottom: 4 }}>{item.name}</div>
+                  <Space size={4} wrap>
+                    <Tag color="blue">{item.type}</Tag>
+                    <Tag color={getRepaymentTypeColor(item.repaymentType)}>
+                      {REPAYMENT_TYPE_LABELS[item.repaymentType as RepaymentType] || item.repaymentType}
+                    </Tag>
+                  </Space>
+                </div>
+                <span style={{ color: COLORS.danger, fontWeight: 500, fontSize: FONT.body }}>¥{formatMoney(item.remainingAmount)}</span>
+              </div>
+              {/* 信息行 */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: SPACING.md, marginTop: SPACING.sm }}>
+                {item.creditLimit && (
+                  <div>
+                    <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>额度</div>
+                    <div style={{ fontSize: FONT.bodySmall }}>¥{formatMoney(item.creditLimit)}</div>
+                  </div>
+                )}
+                {item.interestRate && (
+                  <div>
+                    <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>年利率</div>
+                    <div style={{ fontSize: FONT.bodySmall }}>
+                      <Tag color={item.interestRate >= 18 ? 'red' : item.interestRate >= 10 ? 'orange' : 'green'} style={{ marginLeft: 0 }}>{item.interestRate}%</Tag>
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>还款日</div>
+                  <div style={{ fontSize: FONT.bodySmall }}>
+                    {[item.dueDate && `出账${item.dueDate}日`, item.lastDueDate && `到期${item.lastDueDate}日`].filter(Boolean).join(' / ') || '-'}
+                  </div>
+                </div>
+                {item.interestRate && (
+                  <div>
+                    <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>月利息</div>
+                    <div style={{ fontSize: FONT.bodySmall, color: COLORS.warning }}>¥{formatMoney(calculateMonthlyInterest(item.remainingAmount, item.interestRate))}</div>
+                  </div>
+                )}
+              </div>
+              {/* 操作行 */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 0, marginTop: SPACING.sm, borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACING.sm }}>
+                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>
+                <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(item.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                </Popconfirm>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : (
+        /* 桌面端表格 */
         <Table
           columns={columns}
-          dataSource={sortedDebts}
+          dataSource={filteredDebts}
           rowKey="id"
           pagination={{
             defaultPageSize: 10,
@@ -275,6 +430,10 @@ export default function DebtManager() {
             showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`
           }}
           size="middle"
+          expandable={{
+            expandedRowRender: expandRowRender,
+            rowExpandable: (record: any) => !!(record.note || record.maturityDate || record.interestRate || record.dueDate || record.lastDueDate),
+          }}
         />
       )}
 
