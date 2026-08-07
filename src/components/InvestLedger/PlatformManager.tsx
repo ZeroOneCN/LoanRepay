@@ -91,23 +91,34 @@ export default function PlatformManager() {
     setPModalOpen(true);
   };
   const submitP = async () => {
+    let values;
     try {
-      const values = await pForm.validateFields();
-      if (!values.name?.trim()) { message.warning('请输入平台名称'); return; }
-      if (!values.markets || values.markets.length === 0) {
-        message.warning('请选择市场类型'); return;
-      }
-      const data = { name: values.name.trim(), markets: values.markets, currency: values.currency, note: values.note };
+      values = await pForm.validateFields();
+    } catch {
+      return; // 校验失败，表单自带红色提示
+    }
+    if (!values.name?.trim()) { message.warning('请输入平台名称'); return; }
+    if (!values.markets || values.markets.length === 0) {
+      message.warning('请选择市场类型'); return;
+    }
+    const data = { name: values.name.trim(), markets: values.markets, currency: values.currency, note: values.note };
+    try {
       if (pEditingId) { await updatePlatform(pEditingId, data); message.success('更新成功'); }
       else { await addPlatform(data); message.success('添加成功'); }
       setPModalOpen(false);
-    } catch (e) { /* 静默 */ }
+    } catch (e: any) {
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
+    }
   };
   const deleteP = async (id: string) => {
     const relAcc = accounts.filter(a => a.platformId === id).length;
     const relPnl = pnlRecords.filter(r => r.platformId === id).length;
-    await deletePlatform(id);
-    message.success(relAcc + relPnl > 0 ? `已删除平台及 ${relAcc} 个账户、${relPnl} 条盈亏记录` : '删除成功');
+    try {
+      await deletePlatform(id);
+      message.success(relAcc + relPnl > 0 ? `已删除平台及 ${relAcc} 个账户、${relPnl} 条盈亏记录` : '删除成功');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败，请检查后端服务是否启动');
+    }
   };
 
   // ====== 账户操作 ======
@@ -140,31 +151,42 @@ export default function PlatformManager() {
     setAModalOpen(true);
   };
   const submitA = async () => {
+    let values;
     try {
-      const values = await aForm.validateFields();
-      if (!values.name?.trim()) { message.warning('请输入账户名称'); return; }
-      if (!values.platformId) { message.warning('请选择所属平台'); return; }
-      const pf = platforms.find(p => p.id === values.platformId);
-      const isCrypto = pf?.markets?.includes('crypto');
-      if (isCrypto && (!values.productTypes || values.productTypes.length === 0)) {
-        message.warning('请选择类型（现货/合约）'); return;
-      }
-      const data = {
-        platformId: values.platformId,
-        name: values.name.trim(),
-        currency: values.currency,
-        productTypes: isCrypto ? values.productTypes : undefined,
-        note: values.note,
-      };
+      values = await aForm.validateFields();
+    } catch {
+      return; // 校验失败，表单自带红色提示
+    }
+    if (!values.name?.trim()) { message.warning('请输入账户名称'); return; }
+    if (!values.platformId) { message.warning('请选择所属平台'); return; }
+    const pf = platforms.find(p => p.id === values.platformId);
+    const isCrypto = pf?.markets?.includes('crypto');
+    if (isCrypto && (!values.productTypes || values.productTypes.length === 0)) {
+      message.warning('请选择类型（现货/合约）'); return;
+    }
+    const data = {
+      platformId: values.platformId,
+      name: values.name.trim(),
+      currency: values.currency,
+      productTypes: isCrypto ? values.productTypes : undefined,
+      note: values.note,
+    };
+    try {
       if (aEditingId) { await updateAccount(aEditingId, data); message.success('更新成功'); }
       else { await addAccount(data); message.success('添加成功'); }
       setAModalOpen(false);
-    } catch (e) { /* 静默 */ }
+    } catch (e: any) {
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
+    }
   };
   const deleteA = async (id: string) => {
     const relCount = pnlRecords.filter(r => r.accountId === id).length;
-    await deleteAccount(id);
-    message.success(relCount > 0 ? `已删除账户及关联的 ${relCount} 条盈亏记录` : '删除成功');
+    try {
+      await deleteAccount(id);
+      message.success(relCount > 0 ? `已删除账户及关联的 ${relCount} 条盈亏记录` : '删除成功');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败，请检查后端服务是否启动');
+    }
   };
 
   const selectedPlatformForAccount = Form.useWatch('platformId', aForm);

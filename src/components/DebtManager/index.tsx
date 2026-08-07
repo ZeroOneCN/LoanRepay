@@ -152,13 +152,18 @@ export default function DebtManager() {
   };
 
   const handleSubmit = async () => {
+    let values;
     try {
-      const values = await form.validateFields();
-      const data: any = { ...values, maturityDate: values.maturityDate ? values.maturityDate.format('YYYY-MM-DD') : undefined };
+      values = await form.validateFields();
+    } catch (e) { console.error('Form validation failed:', e); return; }
+    const data: any = { ...values, maturityDate: values.maturityDate ? values.maturityDate.format('YYYY-MM-DD') : undefined };
+    try {
       if (editingId) { await updateDebt(editingId, data); message.success('债务更新成功'); }
       else { await addDebt(data); message.success('债务添加成功'); }
       setIsModalOpen(false);
-    } catch (e) { console.error('Form validation failed:', e); }
+    } catch (e: any) {
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
+    }
   };
 
   const handleRepay = (record: any) => {
@@ -176,13 +181,17 @@ export default function DebtManager() {
     if (repayInterest > repayAmount) { message.warning('利息部分不能超过还款总额'); return; }
     const principalPortion = repayAmount - repayInterest;
     const newRemaining = repayModal.remaining - principalPortion;
-    await repayDebt(repayModal.debtId, repayAmount, repayInterest);
-    if (newRemaining === 0) {
-      message.success(`「${repayModal.debtName}」已还清`);
-    } else {
-      message.success(`「${repayModal.debtName}」还款成功，剩余 ¥${formatMoney(newRemaining)}`);
+    try {
+      await repayDebt(repayModal.debtId, repayAmount, repayInterest);
+      if (newRemaining === 0) {
+        message.success(`「${repayModal.debtName}」已还清`);
+      } else {
+        message.success(`「${repayModal.debtName}」还款成功，剩余 ¥${formatMoney(newRemaining)}`);
+      }
+      setRepayModal({ ...repayModal, visible: false });
+    } catch (e: any) {
+      message.error(e?.message || '还款失败，请检查后端服务是否启动');
     }
-    setRepayModal({ ...repayModal, visible: false });
   };
 
   const totalCreditLimit = debts.reduce((sum, d) => sum + (d.creditLimit || 0), 0);
@@ -298,7 +307,7 @@ export default function DebtManager() {
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
           <Button type="link" size="small" onClick={() => handleRepay(record)} style={{ padding: '0 4px' }}>还款</Button>
           <Button type="link" size="small" onClick={() => handleEdit(record)} style={{ padding: '0 4px' }}>编辑</Button>
-          <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
+          <Popconfirm title="确定删除？" onConfirm={async () => { try { await deleteDebt(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
         </div>
@@ -466,7 +475,7 @@ export default function DebtManager() {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 0, marginTop: SPACING.sm, borderTop: `1px solid ${COLORS.border}`, paddingTop: SPACING.sm }}>
                 <Button type="link" size="small" icon={<TransactionOutlined />} onClick={() => handleRepay(item)}>还款</Button>
                 <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>
-                <Popconfirm title="确定删除？" onConfirm={async () => { await deleteDebt(item.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
+                <Popconfirm title="确定删除？" onConfirm={async () => { try { await deleteDebt(item.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定" cancelText="取消">
                   <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
                 </Popconfirm>
               </div>

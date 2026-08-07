@@ -44,11 +44,16 @@ export default function InterestStats() {
   };
 
   const handleInterestSubmit = async () => {
+    let values;
     try {
-      const values = await interestForm.validateFields();
-      const debt = debts.find(d => d.id === values.debt_id);
-      if (!debt) { message.error('未找到对应债务'); return; }
-      if (!values.amount || values.amount <= 0) { message.warning('请输入有效利息金额'); return; }
+      values = await interestForm.validateFields();
+    } catch {
+      return; // 校验失败，表单自带红色提示
+    }
+    const debt = debts.find(d => d.id === values.debt_id);
+    if (!debt) { message.error('未找到对应债务'); return; }
+    if (!values.amount || values.amount <= 0) { message.warning('请输入有效利息金额'); return; }
+    try {
       await recordTransaction({
         debt_id: debt.id,
         debt_name: debt.name,
@@ -62,8 +67,8 @@ export default function InterestStats() {
       });
       message.success(`已为「${debt.name}」录入未支付利息 ¥${formatMoney(values.amount)}`);
       setInterestModalOpen(false);
-    } catch (e) {
-      // 校验失败时静默处理
+    } catch (e: any) {
+      message.error(e?.message || '录入失败，请检查后端服务是否启动');
     }
   };
 

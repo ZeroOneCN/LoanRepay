@@ -78,20 +78,25 @@ export default function PnlRecords() {
   };
 
   const handleSubmit = async () => {
+    let values;
     try {
-      const values = await form.validateFields();
-      if (!values.accountId) { message.warning('请选择账户'); return; }
-      const acc = accounts.find(a => a.id === values.accountId);
-      if (!acc) { message.warning('账户无效'); return; }
-      const data = {
-        platformId: acc.platformId,
-        accountId: acc.id,
-        symbol: values.symbol?.trim() ? values.symbol.trim().toUpperCase() : undefined,
-        currency: values.currency,
-        pnl: values.pnl,
-        recordedAt: values.recordedAt.format('YYYY-MM-DD HH:mm'),
-        note: values.note,
-      };
+      values = await form.validateFields();
+    } catch {
+      return; // 校验失败，表单自带红色提示
+    }
+    if (!values.accountId) { message.warning('请选择账户'); return; }
+    const acc = accounts.find(a => a.id === values.accountId);
+    if (!acc) { message.warning('账户无效'); return; }
+    const data = {
+      platformId: acc.platformId,
+      accountId: acc.id,
+      symbol: values.symbol?.trim() ? values.symbol.trim().toUpperCase() : undefined,
+      currency: values.currency,
+      pnl: values.pnl,
+      recordedAt: values.recordedAt.format('YYYY-MM-DD HH:mm'),
+      note: values.note,
+    };
+    try {
       if (editingId) {
         await updatePnl(editingId, data);
         message.success('更新成功');
@@ -100,14 +105,18 @@ export default function PnlRecords() {
         message.success('添加成功');
       }
       setModalOpen(false);
-    } catch (e) {
-      // 校验失败静默
+    } catch (e: any) {
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
     }
   };
 
   const handleDelete = async (id: string) => {
-    await deletePnl(id);
-    message.success('删除成功');
+    try {
+      await deletePnl(id);
+      message.success('删除成功');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败，请检查后端服务是否启动');
+    }
   };
 
   // 切换账户时自动同步币种（加密货币还可以看合约/现货展示）

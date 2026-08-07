@@ -101,18 +101,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch { return 'CNY'; }
   });
 
+  // 统一错误提示：后端未启动或写入失败时抛出带友好信息的错误
+  const wrapErr = (e: any, action: string) => {
+    const msg = e?.message || String(e);
+    // fetch failed（后端没起）的特征
+    if (msg.includes('Failed to fetch') || msg.includes('fetch')) {
+      return new Error(`后端服务未启动或无法连接，${action}失败。请先启动后端服务（npm run server）后重试。`);
+    }
+    return new Error(`${action}失败：${msg}`);
+  };
+
   const recordTransaction = async (tx: Omit<Transaction, 'id' | 'created_at'>) => {
     const fullTx: Transaction = {
       ...tx,
       id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       created_at: new Date().toISOString()
     };
-    setTransactions(prev => [fullTx, ...prev]);
+    // 先写库，成功后再更新 state；失败抛错让调用方感知
     try {
       await dbAddTransaction(fullTx);
     } catch (e) {
-      console.error('Failed to record transaction:', e);
+      throw wrapErr(e, '记录交易');
     }
+    setTransactions(prev => [fullTx, ...prev]);
   };
 
   useEffect(() => {
@@ -156,9 +167,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `debt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date().toISOString()
     };
-    setDebts(prev => [...prev, newDebt]);
+    // 先写库，成功后再更新 state
     try {
       await dbAddDebt(newDebt);
+    } catch (e) {
+      throw wrapErr(e, '添加债务');
+    }
+    setDebts(prev => [...prev, newDebt]);
+    // 交易记录是辅助记录，失败只打日志不阻断主流程
+    try {
       await recordTransaction({
         debt_id: newDebt.id,
         debt_name: newDebt.name,
@@ -171,21 +188,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
         note: '新增债务'
       });
     } catch (e) {
-      console.error('Failed to add debt to DB:', e);
+      console.error('Failed to record transaction (non-blocking):', e);
     }
   };
 
   const updateDebt = async (id: string, updates: Partial<Debt>) => {
     const oldDebt = debts.find(d => d.id === id);
-    setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     try {
       await dbUpdateDebt(id, updates);
-      // 仅当金额变动时记录交易
+    } catch (e) {
+      throw wrapErr(e, '更新债务');
+    }
+    setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    // 交易记录辅助，失败不阻断
+    try {
       if (oldDebt && updates.remainingAmount !== undefined && updates.remainingAmount !== oldDebt.remainingAmount) {
         const diff = updates.remainingAmount - oldDebt.remainingAmount;
         const isRepay = diff < 0;
         const changeAmount = Math.abs(diff);
-        // 利息拆分：如果是还款（金额减少），按月利息拆分
         let interestPortion = 0;
         let principalPortion = changeAmount;
         if (isRepay && oldDebt.interestRate) {
@@ -205,7 +225,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
           note: isRepay ? '还款扣减' : '手动调整'
         });
       } else if (oldDebt && (updates.interestRate !== undefined || updates.creditLimit !== undefined || updates.name !== undefined)) {
-        // 非金额变动的编辑也记录
         await recordTransaction({
           debt_id: id,
           debt_name: updates.name || oldDebt.name,
@@ -219,15 +238,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (e) {
-      console.error('Failed to update debt in DB:', e);
+      console.error('Failed to record transaction (non-blocking):', e);
     }
   };
 
   const deleteDebt = async (id: string) => {
     const debt = debts.find(d => d.id === id);
-    setDebts(prev => prev.filter(d => d.id !== id));
     try {
       await dbDeleteDebt(id);
+    } catch (e) {
+      throw wrapErr(e, '删除债务');
+    }
+    setDebts(prev => prev.filter(d => d.id !== id));
+    try {
       if (debt) {
         await recordTransaction({
           debt_id: id,
@@ -242,7 +265,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         });
       }
     } catch (e) {
-      console.error('Failed to delete debt from DB:', e);
+      console.error('Failed to record transaction (non-blocking):', e);
     }
   };
 
@@ -251,9 +274,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!debt) return;
     const principalPortion = amount - interestPortion;
     const newRemaining = debt.remainingAmount - principalPortion;
-    setDebts(prev => prev.map(d => d.id === id ? { ...d, remainingAmount: newRemaining } : d));
     try {
       await dbUpdateDebt(id, { remainingAmount: newRemaining });
+    } catch (e) {
+      throw wrapErr(e, '还款');
+    }
+    setDebts(prev => prev.map(d => d.id === id ? { ...d, remainingAmount: newRemaining } : d));
+    try {
       await recordTransaction({
         debt_id: id,
         debt_name: debt.name,
@@ -266,7 +293,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         note: `还款（利息¥${interestPortion.toFixed(2)} + 本金¥${principalPortion.toFixed(2)}）`
       });
     } catch (e) {
-      console.error('Failed to repay debt:', e);
+      console.error('Failed to record transaction (non-blocking):', e);
     }
   };
 
@@ -276,30 +303,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `asset_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date().toISOString()
     };
+    try { await dbAddAsset(newAsset); } catch (e) { throw wrapErr(e, '添加资产'); }
     setAssets(prev => [...prev, newAsset]);
-    try {
-      await dbAddAsset(newAsset);
-    } catch (e) {
-      console.error('Failed to add asset to DB:', e);
-    }
   };
 
   const updateAsset = async (id: string, updates: Partial<Asset>) => {
+    try { await dbUpdateAsset(id, updates); } catch (e) { throw wrapErr(e, '更新资产'); }
     setAssets(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-    try {
-      await dbUpdateAsset(id, updates);
-    } catch (e) {
-      console.error('Failed to update asset in DB:', e);
-    }
   };
 
   const deleteAsset = async (id: string) => {
+    try { await dbDeleteAsset(id); } catch (e) { throw wrapErr(e, '删除资产'); }
     setAssets(prev => prev.filter(a => a.id !== id));
-    try {
-      await dbDeleteAsset(id);
-    } catch (e) {
-      console.error('Failed to delete asset from DB:', e);
-    }
   };
 
   const updateIncomeConfig = async (config: Partial<IncomeConfig>) => {
@@ -308,33 +323,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ...config,
       updateAt: new Date().toISOString()
     };
+    try { await saveIncomeConfig(newConfig); } catch (e) { throw wrapErr(e, '保存收支配置'); }
     setIncomeConfig(newConfig);
-    try {
-      await saveIncomeConfig(newConfig);
-    } catch (e) {
-      console.error('Failed to save income config to DB:', e);
-    }
   };
 
   const setStrategy = async (newStrategy: RepaymentStrategy) => {
+    try { await saveStrategy(newStrategy); } catch (e) { throw wrapErr(e, '保存策略'); }
     setStrategyState(newStrategy);
-    try {
-      await saveStrategy(newStrategy);
-    } catch (e) {
-      console.error('Failed to save strategy to DB:', e);
-    }
   };
 
   const setTargetDate = async (date: string) => {
+    try { await saveTargetDate(date); } catch (e) { throw wrapErr(e, '保存目标日期'); }
     setTargetDateState(date);
-    try {
-      await saveTargetDate(date);
-    } catch (e) {
-      console.error('Failed to save target date to DB:', e);
-    }
   };
 
   // ==================== 投资记账方法 ====================
+  // 原则：先 await 写库成功，再 setState；失败抛错让调用方感知并提示
 
   const addPlatform = async (p: Omit<InvestPlatform, 'id' | 'createdAt'>) => {
     const newPlatform: InvestPlatform = {
@@ -342,20 +346,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `pf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date().toISOString()
     };
+    try { await dbAddPlatform(newPlatform); } catch (e) { throw wrapErr(e, '添加平台'); }
     setPlatforms(prev => [newPlatform, ...prev]);
-    try { await dbAddPlatform(newPlatform); } catch (e) { console.error('Failed to add platform:', e); }
   };
 
   const updatePlatform = async (id: string, updates: Partial<InvestPlatform>) => {
+    try { await dbUpdatePlatform(id, updates); } catch (e) { throw wrapErr(e, '更新平台'); }
     setPlatforms(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    try { await dbUpdatePlatform(id, updates); } catch (e) { console.error('Failed to update platform:', e); }
   };
 
   const deletePlatform = async (id: string) => {
+    try { await dbDeletePlatform(id); } catch (e) { throw wrapErr(e, '删除平台'); }
+    // 后端已级联删除账户和盈亏，前端同步更新
     setPlatforms(prev => prev.filter(p => p.id !== id));
     setAccounts(prev => prev.filter(a => a.platformId !== id));
     setPnlRecords(prev => prev.filter(r => r.platformId !== id));
-    try { await dbDeletePlatform(id); } catch (e) { console.error('Failed to delete platform:', e); }
   };
 
   const addAccount = async (a: Omit<InvestAccount, 'id' | 'createdAt'>) => {
@@ -364,19 +369,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `acc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date().toISOString()
     };
+    try { await dbAddAccount(newAccount); } catch (e) { throw wrapErr(e, '添加账户'); }
     setAccounts(prev => [newAccount, ...prev]);
-    try { await dbAddAccount(newAccount); } catch (e) { console.error('Failed to add account:', e); }
   };
 
   const updateAccount = async (id: string, updates: Partial<InvestAccount>) => {
+    try { await dbUpdateAccount(id, updates); } catch (e) { throw wrapErr(e, '更新账户'); }
     setAccounts(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
-    try { await dbUpdateAccount(id, updates); } catch (e) { console.error('Failed to update account:', e); }
   };
 
   const deleteAccount = async (id: string) => {
+    try { await dbDeleteAccount(id); } catch (e) { throw wrapErr(e, '删除账户'); }
     setAccounts(prev => prev.filter(a => a.id !== id));
     setPnlRecords(prev => prev.filter(r => r.accountId !== id));
-    try { await dbDeleteAccount(id); } catch (e) { console.error('Failed to delete account:', e); }
   };
 
   const addPnl = async (p: Omit<PnlRecord, 'id' | 'createdAt'>) => {
@@ -385,18 +390,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `pnl_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       createdAt: new Date().toISOString()
     };
+    try { await dbAddPnl(newPnl); } catch (e) { throw wrapErr(e, '添加盈亏记录'); }
     setPnlRecords(prev => [newPnl, ...prev]);
-    try { await dbAddPnl(newPnl); } catch (e) { console.error('Failed to add pnl:', e); }
   };
 
   const updatePnl = async (id: string, updates: Partial<PnlRecord>) => {
+    try { await dbUpdatePnl(id, updates); } catch (e) { throw wrapErr(e, '更新盈亏记录'); }
     setPnlRecords(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    try { await dbUpdatePnl(id, updates); } catch (e) { console.error('Failed to update pnl:', e); }
   };
 
   const deletePnl = async (id: string) => {
+    try { await dbDeletePnl(id); } catch (e) { throw wrapErr(e, '删除盈亏记录'); }
     setPnlRecords(prev => prev.filter(p => p.id !== id));
-    try { await dbDeletePnl(id); } catch (e) { console.error('Failed to delete pnl:', e); }
   };
 
   const saveFxRate = async (r: Omit<FxRate, 'id' | 'updatedAt'> & { id?: string }) => {
@@ -408,16 +413,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       rate: r.rate,
       updatedAt: new Date().toISOString()
     };
+    try { await dbSaveFxRate(newRate); } catch (e) { throw wrapErr(e, '保存汇率'); }
     setFxRates(prev => {
       const others = prev.filter(x => x.from !== r.from);
       return [...others, newRate];
     });
-    try { await dbSaveFxRate(newRate); } catch (e) { console.error('Failed to save fx rate:', e); }
   };
 
   const deleteFxRate = async (id: string) => {
+    try { await dbDeleteFxRate(id); } catch (e) { throw wrapErr(e, '删除汇率'); }
     setFxRates(prev => prev.filter(r => r.id !== id));
-    try { await dbDeleteFxRate(id); } catch (e) { console.error('Failed to delete fx rate:', e); }
   };
 
   const setDisplayCurrency = (cur: Currency) => {

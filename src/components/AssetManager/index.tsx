@@ -39,12 +39,17 @@ export default function AssetManager() {
   };
 
   const handleSubmit = async () => {
+    let values;
     try {
-      const values = await form.validateFields();
+      values = await form.validateFields();
+    } catch (e) { console.error('Form validation failed:', e); return; }
+    try {
       if (editingId) { await updateAsset(editingId, values); message.success('资产更新成功'); }
       else { await addAsset(values); message.success('资产添加成功'); }
       setIsModalOpen(false);
-    } catch (e) { console.error('Form validation failed:', e); }
+    } catch (e: any) {
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
+    }
   };
 
   const liquidityColor = { high: 'green', medium: 'orange', low: 'red' };
@@ -81,7 +86,7 @@ export default function AssetManager() {
       render: (_: any, record: any) => (
         <Space size={0}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-          <Popconfirm title="确定删除这笔资产？" onConfirm={async () => { await deleteAsset(record.id); message.success('删除成功'); }} okText="确定" cancelText="取消">
+          <Popconfirm title="确定删除这笔资产？" onConfirm={async () => { try { await deleteAsset(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
         </Space>

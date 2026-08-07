@@ -38,20 +38,29 @@ export default function RateSettings() {
   };
 
   const handleSubmit = async () => {
+    let values;
     try {
-      const values = await form.validateFields();
-      if (!values.rate || values.rate <= 0) { message.warning('请输入有效汇率'); return; }
+      values = await form.validateFields();
+    } catch {
+      return; // 校验失败，表单自带红色提示
+    }
+    if (!values.rate || values.rate <= 0) { message.warning('请输入有效汇率'); return; }
+    try {
       await saveFxRate({ id: editingId || undefined, from: values.from, rate: values.rate });
       message.success(editingId ? '更新成功' : '添加成功');
       setModalOpen(false);
-    } catch (e) {
-      // 校验失败静默
+    } catch (e: any) {
+      message.error(e?.message || '保存失败，请检查后端服务是否启动');
     }
   };
 
   const handleDelete = async (id: string) => {
-    await deleteFxRate(id);
-    message.success('删除成功');
+    try {
+      await deleteFxRate(id);
+      message.success('删除成功');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败，请检查后端服务是否启动');
+    }
   };
 
   // 已设置币种

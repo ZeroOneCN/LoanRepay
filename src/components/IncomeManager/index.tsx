@@ -33,9 +33,12 @@ export default function IncomeManager() {
   };
 
   const handleSave = async () => {
+    let values;
     try {
-      const values = await form.validateFields();
-      const available = Math.max(0, values.monthlyIncome - values.monthlyExpense + (values.extraIncome || 0));
+      values = await form.validateFields();
+    } catch (e) { console.error('Form validation failed:', e); return; }
+    const available = Math.max(0, values.monthlyIncome - values.monthlyExpense + (values.extraIncome || 0));
+    try {
       await updateIncomeConfig({
         monthlyIncome: values.monthlyIncome,
         monthlyExpense: values.monthlyExpense,
@@ -43,7 +46,9 @@ export default function IncomeManager() {
         availableForRepayment: available
       });
       message.success('保存成功');
-    } catch (e) { console.error('Form validation failed:', e); }
+    } catch (e: any) {
+      message.error(e?.message || '保存失败，请检查后端服务是否启动');
+    }
   };
 
   return (
