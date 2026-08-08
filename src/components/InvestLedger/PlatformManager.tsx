@@ -245,42 +245,41 @@ export default function PlatformManager() {
   // ====== 列定义：账户 ======
   const accountColumns = [
     {
-      title: '账户名称', dataIndex: 'name', key: 'name',
+      title: '账户名称', dataIndex: 'name', key: 'name', width: 160,
       render: (t: string, r: any) => {
         const pf = platforms.find(p => p.id === r.platformId);
         return (
           <div>
-            <div style={{ fontWeight: 500, fontSize: FONT.tableCell }}>{t}</div>
-            <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginTop: 2 }}>所属平台：{pf?.name || '未知'}</div>
+            <div style={{ fontWeight: 500, fontSize: FONT.tableCell, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t}>{t}</div>
+            <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={'所属平台：' + (pf?.name || '未知')}>所属平台：{pf?.name || '未知'}</div>
           </div>
         );
       }
     },
     {
-      title: '市场', key: 'markets', width: 160,
+      title: '市场', key: 'markets', width: 140,
       render: (_: any, r: any) => {
         const pf = platforms.find(p => p.id === r.platformId);
         return <MarketTags markets={pf?.markets} />;
       }
     },
     {
-      title: '类型', key: 'productType', width: 120,
+      title: '类型', key: 'productType', width: 110,
       render: (_: any, r: any) => {
-        // 兼容老的单值 productType 字段
         let pts = r.productTypes;
         if (!pts && r.productType) pts = [r.productType];
         return <ProductTypeTags types={Array.isArray(pts) ? pts : (pts ? [pts] : undefined)} />;
       }
     },
-    { title: '币种', dataIndex: 'currency', key: 'currency', width: 80, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
+    { title: '币种', dataIndex: 'currency', key: 'currency', width: 72, render: (c: Currency) => <span style={{ fontSize: FONT.tableCell }}>{c}</span> },
     {
-      title: '盈亏记录', key: 'pnlCount', width: 80,
+      title: '盈亏记录', key: 'pnlCount', width: 72,
       render: (_: any, r: any) => {
         const count = pnlRecords.filter(p => p.accountId === r.id).length;
         return <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{count}</span>;
       }
     },
-    { title: '备注', dataIndex: 'note', key: 'note', ellipsis: true, render: (v: string) => <span style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{v || '-'}</span> },
+    { title: '备注', dataIndex: 'note', key: 'note', width: 140, ellipsis: true, render: (v: string) => <span title={v || ''} style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{v || '-'}</span> },
     {
       title: '操作', key: 'action', width: 120, fixed: 'right' as const,
       render: (_: any, r: any) => (
