@@ -257,14 +257,14 @@ export default function PlatformManager() {
       }
     },
     {
-      title: '市场', key: 'markets', width: 140,
+      title: '市场', key: 'markets', width: 110,
       render: (_: any, r: any) => {
         const pf = platforms.find(p => p.id === r.platformId);
         return <MarketTags markets={pf?.markets} />;
       }
     },
     {
-      title: '类型', key: 'productType', width: 110,
+      title: '类型', key: 'productType', width: 150,
       render: (_: any, r: any) => {
         let pts = r.productTypes;
         if (!pts && r.productType) pts = [r.productType];
