@@ -280,6 +280,53 @@ db.exec(`
 // 迁移老表结构（如果 invest_pnl 是老版本创建的）
 addColumnIfNotExists('invest_pnl', 'accountId', 'TEXT');
 
+// 老版本的 invest_pnl 表有 symbol TEXT NOT NULL 约束，用户不填品种时会报错
+// 通过「重建表 + 复制数据」迁移为 symbol TEXT 可空
+(function migrateInvestPnlSymbolNullable() {
+  try {
+    const cols = db.pragma('table_info(invest_pnl)');
+    const symbolCol = cols.find(c => c.name === 'symbol');
+    if (!symbolCol || symbolCol.notnull === 0) return; // 已经可空，无需迁移
+    // 利用 SQLite 的 built-in "rebuild"：重命名、创建新表、导数据
+    const tx = db.transaction(() => {
+      // 1. 导出当前所有数据
+      const rows = db.prepare('SELECT id, platformId, accountId, symbol, currency, pnl, recordedAt, note, createdAt FROM invest_pnl').all();
+      // 2. 重命名旧表
+      db.prepare('ALTER TABLE invest_pnl RENAME TO invest_pnl_old_symbol_mig').run();
+      // 3. 建新表（和 server/index.js 中最新 CREATE TABLE 语句一致）
+      db.prepare(`CREATE TABLE invest_pnl (
+        id TEXT PRIMARY KEY,
+        platformId TEXT NOT NULL,
+        accountId TEXT,
+        symbol TEXT,
+        currency TEXT NOT NULL,
+        pnl REAL NOT NULL,
+        recordedAt TEXT NOT NULL,
+        note TEXT,
+        createdAt TEXT NOT NULL
+      )`).run();
+      // 4. 导入数据（symbol 保持原值）
+      const insert = db.prepare('INSERT INTO invest_pnl (id, platformId, accountId, symbol, currency, pnl, recordedAt, note, createdAt) VALUES (@id, @platformId, @accountId, @symbol, @currency, @pnl, @recordedAt, @note, @createdAt)');
+      rows.forEach(r => insert.run(r));
+      // 5. 删除旧表
+      db.prepare('DROP TABLE invest_pnl_old_symbol_mig').run();
+      console.log('[migrate] invest_pnl.symbol 已由 NOT NULL 迁移为可空，迁移行数:', rows.length);
+    });
+    tx();
+  } catch (e) {
+    console.warn('[migrate] invest_pnl.symbol 迁移失败，将尝试回滚：', e.message);
+    try {
+      const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='invest_pnl_old_symbol_mig'").get();
+      if (exists) {
+        db.prepare("DROP TABLE IF EXISTS invest_pnl").run();
+        db.prepare('ALTER TABLE invest_pnl_old_symbol_mig RENAME TO invest_pnl').run();
+      }
+    } catch (err) {
+      console.warn('[migrate] 回滚失败:', err.message);
+    }
+  }
+})();
+
 db.exec(`
   CREATE TABLE IF NOT EXISTS fx_rates (
     id TEXT PRIMARY KEY,
