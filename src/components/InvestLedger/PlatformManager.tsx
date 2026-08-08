@@ -264,7 +264,7 @@ export default function PlatformManager() {
       }
     },
     {
-      title: '类型', key: 'productType', width: 150,
+      title: '类型', key: 'productType', width: 230,
       render: (_: any, r: any) => {
         let pts = r.productTypes;
         if (!pts && r.productType) pts = [r.productType];
