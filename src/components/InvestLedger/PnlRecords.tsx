@@ -3,7 +3,7 @@ import { Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Pop
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
-import { Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
+import { Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS, PRODUCT_TYPE_COLORS } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
@@ -159,7 +159,7 @@ export default function PnlRecords() {
             <div style={{ fontWeight: 500, fontSize: FONT.tableCell }}>
               {acc?.name || '未知账户'}
               {acc?.productTypes && acc.productTypes.length > 0 && acc.productTypes.map(pt => (
-                <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 4, marginRight: 0 }}>
+                <Tag key={pt} color={PRODUCT_TYPE_COLORS[pt as ProductType]} style={{ marginLeft: 4, marginRight: 0 }}>
                   {PRODUCT_TYPE_LABELS[pt as ProductType]}
                 </Tag>
               ))}
@@ -308,7 +308,7 @@ export default function PnlRecords() {
                       <span style={{ fontWeight: 500 }}>{a.name}</span>
                       <span style={{ color: COLORS.textTertiary, marginLeft: 4, fontSize: FONT.caption }}>{pf?.name}</span>
                       {pts.map(pt => (
-                        <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 8 }}>
+                        <Tag key={pt} color={PRODUCT_TYPE_COLORS[pt as ProductType]} style={{ marginLeft: 8 }}>
                           {PRODUCT_TYPE_LABELS[pt as ProductType]}
                         </Tag>
                       ))}

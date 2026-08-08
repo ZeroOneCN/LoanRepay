@@ -3,7 +3,7 @@ import { Row, Col, Button, Empty, Tag, Space } from 'antd';
 import { RiseOutlined, FallOutlined, DollarOutlined, PlusOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import { useApp } from '../../context/AppContext';
-import { INVEST_MARKET_LABELS, InvestMarket, Currency, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
+import { INVEST_MARKET_LABELS, InvestMarket, Currency, ProductType, PRODUCT_TYPE_LABELS, PRODUCT_TYPE_COLORS } from '../../types';
 import { formatMoney } from '../../utils/repaymentEngine';
 import StatisticCard from '../Common/StatisticCard';
 import SectionCard from '../Common/SectionCard';
@@ -258,7 +258,7 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
                 <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary, marginBottom: SPACING.md }}>
                   {a.platformName}
                   {a.productTypes && a.productTypes.length > 0 && a.productTypes.map(pt => (
-                    <Tag key={pt} color={pt === 'spot' ? 'green' : 'magenta'} style={{ marginLeft: 6 }}>
+                    <Tag key={pt} color={PRODUCT_TYPE_COLORS[pt]} style={{ marginLeft: 6 }}>
                       {PRODUCT_TYPE_LABELS[pt]}
                     </Tag>
                   ))}

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Tabs, Table, Button, Modal, Form, Input, Select, Popconfirm, Tag, Checkbox, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
-import { InvestMarket, INVEST_MARKET_LABELS, Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS } from '../../types';
+import { InvestMarket, INVEST_MARKET_LABELS, Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS, PRODUCT_TYPE_COLORS } from '../../types';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
 import { COLORS, FONT } from '../../styles/theme';
@@ -13,9 +13,7 @@ const marketColor: Record<InvestMarket, string> = {
   crypto: 'orange', us_stock: 'blue', hk_stock: 'purple', a_stock: 'red', other: 'default'
 };
 
-const productColor: Record<ProductType, string> = {
-  spot: 'green', futures: 'magenta'
-};
+const productColor: Record<ProductType, string> = PRODUCT_TYPE_COLORS;
 
 function MarketTags({ markets }: { markets?: InvestMarket[] }) {
   if (!markets || markets.length === 0) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.caption }}>-</span>;
@@ -132,7 +130,8 @@ export default function PlatformManager() {
     aForm.setFieldsValue({
       platformId: defaultPid,
       currency: defaultPf?.currency || 'USDT',
-      productTypes: isCrypto ? ['spot'] : undefined,
+      // 类型改为可选，默认不预先勾选（用户按需勾选）
+      productTypes: undefined,
     });
     setAModalOpen(true);
   };
@@ -161,14 +160,13 @@ export default function PlatformManager() {
     if (!values.platformId) { message.warning('请选择所属平台'); return; }
     const pf = platforms.find(p => p.id === values.platformId);
     const isCrypto = pf?.markets?.includes('crypto');
-    if (isCrypto && (!values.productTypes || values.productTypes.length === 0)) {
-      message.warning('请选择类型（现货/合约）'); return;
-    }
+    const pts: ProductType[] | undefined =
+      isCrypto && values.productTypes && values.productTypes.length > 0 ? values.productTypes : undefined;
     const data = {
       platformId: values.platformId,
       name: values.name.trim(),
       currency: values.currency,
-      productTypes: isCrypto ? values.productTypes : undefined,
+      productTypes: pts,
       note: values.note,
     };
     try {
@@ -392,8 +390,8 @@ export default function PlatformManager() {
               onChange={(pid) => {
                 const pf = platforms.find(p => p.id === pid);
                 if (pf) {
-                  const isCrypto = pf.markets?.includes('crypto');
-                  aForm.setFieldsValue({ currency: pf.currency, productTypes: isCrypto ? ['spot'] : undefined });
+                  // 类型改为可选，切换平台时不清空已有选择；仅同步币种
+                  aForm.setFieldsValue({ currency: pf.currency });
                 }
               }}
             >
@@ -415,14 +413,15 @@ export default function PlatformManager() {
           {isCryptoPlatform && (
             <Form.Item
               name="productTypes"
-              label="类型（可多选）"
-              tooltip="加密平台可同时选择现货和合约，至少选一个"
-              rules={[{ required: true, message: '请选择类型（现货/合约）' }]}
+              label="类型（可多选，非必填）"
+              tooltip="加密平台可选择现货/合约/Web3钱包/Alpha，均为可选项"
             >
               <Checkbox.Group
                 options={[
                   { label: '现货', value: 'spot' },
                   { label: '合约', value: 'futures' },
+                  { label: 'Web3钱包', value: 'web3_wallet' },
+                  { label: 'Alpha', value: 'alpha' },
                 ]}
               />
             </Form.Item>

@@ -175,12 +175,22 @@ export const CURRENCY_LABELS: Record<Currency, string> = {
   USDT: '泰达币 USDT',
 };
 
-/** 加密平台的产品类型（合约/现货） */
-export type ProductType = 'spot' | 'futures';
+/** 加密平台的产品类型：现货/合约/Web3钱包/Alpha（均可多选） */
+export type ProductType = 'spot' | 'futures' | 'web3_wallet' | 'alpha';
 
 export const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
   spot: '现货',
   futures: '合约',
+  web3_wallet: 'Web3钱包',
+  alpha: 'Alpha',
+};
+
+/** 加密产品类型对应的 Tag 颜色 */
+export const PRODUCT_TYPE_COLORS: Record<ProductType, string> = {
+  spot: 'green',
+  futures: 'magenta',
+  web3_wallet: 'purple',
+  alpha: 'gold',
 };
 
 /** 投资平台 */
