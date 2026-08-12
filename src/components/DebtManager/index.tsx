@@ -422,7 +422,7 @@ export default function DebtManager() {
       render: (_: any, record: any) => (
         <Space size={0} wrap={false}>
           <Button type="link" size="small" onClick={() => handleRepay(record)} style={{ padding: '0 4px' }}>还款</Button>
-          <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => openPaymentDrawer(record)} style={{ padding: '0 4px' }}>记录</Button>
+          <Button type="link" size="small" onClick={() => openPaymentDrawer(record)} style={{ padding: '0 4px' }}>记录</Button>
           <Button type="link" size="small" onClick={() => handleEdit(record)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="确定删除？删除后历史还款记录将保留在交易记录中（未记账的部分可单独删除）。" onConfirm={async () => { try { await deleteDebt(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger style={{ padding: '0 4px' }}>删除</Button>
