@@ -1,9 +1,9 @@
 import { useState, useRef, useMemo } from 'react';
-import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Dropdown, Input as AntInput, Grid } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Dropdown, Input as AntInput, Grid, Drawer, Divider } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined, FileTextOutlined } from '@ant-design/icons';
 import { TransactionOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
-import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType } from '../../types';
+import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType, Transaction } from '../../types';
 import { formatMoney, calculateMonthlyInterest } from '../../utils/repaymentEngine';
 import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
@@ -32,8 +32,15 @@ interface DebtFormValues {
   note?: string;
 }
 
+interface PaymentFormValues {
+  amount: number;
+  interestPortion: number;
+  note?: string;
+  createdAt: dayjs.Dayjs;
+}
+
 export default function DebtManager() {
-  const { debts, addDebt, updateDebt, deleteDebt, repayDebt, totalDebt } = useApp();
+  const { debts, addDebt, updateDebt, deleteDebt, repayDebt, totalDebt, transactions, recordTransaction, updateTransaction, deleteTransaction } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [importLoading, setImportLoading] = useState(false);
@@ -43,6 +50,11 @@ export default function DebtManager() {
   const [repayAmount, setRepayAmount] = useState<number>(0);
   const [repayInterest, setRepayInterest] = useState<number>(0);
   const [form] = Form.useForm<DebtFormValues>();
+  // 还款记录 Drawer / 新增-编辑 Modal
+  const [drawerDebt, setDrawerDebt] = useState<{ id: string; name: string; remaining: number } | null>(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [paymentEditingTx, setPaymentEditingTx] = useState<Transaction | null>(null);
+  const [paymentForm] = Form.useForm<PaymentFormValues>();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const screens = useBreakpoint();
 
@@ -194,6 +206,109 @@ export default function DebtManager() {
     }
   };
 
+  // ========== 还款记录 Drawer + 编辑/新增/删除 ==========
+  const openPaymentDrawer = (record: any) => {
+    setDrawerDebt({ id: record.id, name: record.name, remaining: record.remainingAmount });
+  };
+  const closePaymentDrawer = () => setDrawerDebt(null);
+
+  const debtRepayTxs = useMemo(() => {
+    if (!drawerDebt) return [];
+    return transactions
+      .filter(t => t.debt_id === drawerDebt.id && t.type === 'repay')
+      .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+  }, [drawerDebt, transactions]);
+
+  const repaySummary = useMemo(() => {
+    const list = debtRepayTxs;
+    const total = list.reduce((s, t) => s + (t.amount || 0), 0);
+    const interest = list.reduce((s, t) => s + (t.interest_portion || 0), 0);
+    const principal = list.reduce((s, t) => s + (t.principal_portion || 0), 0);
+    return { count: list.length, total, interest, principal };
+  }, [debtRepayTxs]);
+
+  const openNewPayment = () => {
+    setPaymentEditingTx(null);
+    paymentForm.setFieldsValue({
+      amount: undefined,
+      interestPortion: 0,
+      note: undefined,
+      createdAt: dayjs()
+    });
+    setPaymentModalOpen(true);
+  };
+
+  const openEditPayment = (tx: Transaction) => {
+    setPaymentEditingTx(tx);
+    paymentForm.setFieldsValue({
+      amount: tx.amount,
+      interestPortion: tx.interest_portion || 0,
+      note: tx.note,
+      createdAt: tx.created_at ? dayjs(tx.created_at) : dayjs()
+    });
+    setPaymentModalOpen(true);
+  };
+
+  const handlePaymentDelete = async (tx: Transaction) => {
+    try {
+      await deleteTransaction(tx.id);
+      message.success('删除还款记录成功，债务剩余金额已自动回滚');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败');
+    }
+  };
+
+  const handlePaymentSubmit = async () => {
+    try {
+      const v = await paymentForm.validateFields();
+      if (!drawerDebt) return;
+      if (!v.amount || v.amount <= 0) { message.warning('请输入还款金额'); return; }
+      if ((v.interestPortion || 0) > v.amount) { message.warning('利息不能超过还款总额'); return; }
+      const interestPortion = v.interestPortion || 0;
+      const principalPortion = v.amount - interestPortion;
+      const createdAt = v.createdAt ? v.createdAt.toDate().toISOString() : new Date().toISOString();
+      const currentDebt = debts.find(d => d.id === drawerDebt.id);
+      const currentRemaining = currentDebt?.remainingAmount ?? drawerDebt.remaining;
+
+      if (paymentEditingTx) {
+        // 编辑：更新 transaction 内容 + 改 created_at/interest/amount/note，remaining_after 保持一致即可
+        const updates: Partial<Transaction> = {
+          amount: v.amount,
+          interest_portion: interestPortion,
+          principal_portion: principalPortion,
+          note: v.note,
+          created_at: createdAt,
+        };
+        await updateTransaction(paymentEditingTx.id, updates);
+        message.success('编辑还款记录成功');
+      } else {
+        // 补录：先更新债务 remainingAmount，再写 transaction
+        const newRemaining = currentRemaining - principalPortion;
+        if (newRemaining < -0.01) {
+          message.warning('补录的还款本金超过债务剩余金额，请调整数值');
+          return;
+        }
+        await updateDebt(drawerDebt.id, { remainingAmount: Math.max(0, newRemaining) });
+        await recordTransaction({
+          debt_id: drawerDebt.id,
+          debt_name: drawerDebt.name,
+          type: 'repay',
+          amount: v.amount,
+          interest_portion: interestPortion,
+          principal_portion: principalPortion,
+          remaining_after: Math.max(0, newRemaining),
+          interest_rate: currentDebt?.interestRate,
+          note: v.note || `补录还款（利息¥${interestPortion.toFixed(2)} + 本金¥${principalPortion.toFixed(2)}）`,
+        });
+        message.success('补录还款记录成功');
+      }
+      setPaymentModalOpen(false);
+    } catch (e: any) {
+      if (e?.errorFields) return; // 表单校验错误，不弹提示
+      message.error(e?.message || '操作失败，请检查后端服务是否启动');
+    }
+  };
+
   const totalCreditLimit = debts.reduce((sum, d) => sum + (d.creditLimit || 0), 0);
   const totalAvailable = totalCreditLimit - totalDebt;
 
@@ -302,15 +417,17 @@ export default function DebtManager() {
     {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 200,
+      fixed: 'right' as const,
       render: (_: any, record: any) => (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 0 }}>
+        <Space size={0} wrap={false}>
           <Button type="link" size="small" onClick={() => handleRepay(record)} style={{ padding: '0 4px' }}>还款</Button>
+          <Button type="link" size="small" icon={<FileTextOutlined />} onClick={() => openPaymentDrawer(record)} style={{ padding: '0 4px' }}>记录</Button>
           <Button type="link" size="small" onClick={() => handleEdit(record)} style={{ padding: '0 4px' }}>编辑</Button>
-          <Popconfirm title="确定删除？" onConfirm={async () => { try { await deleteDebt(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定" cancelText="取消">
+          <Popconfirm title="确定删除？删除后历史还款记录将保留在交易记录中（未记账的部分可单独删除）。" onConfirm={async () => { try { await deleteDebt(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger style={{ padding: '0 4px' }}>删除</Button>
           </Popconfirm>
-        </div>
+        </Space>
       )
     }
   ];
@@ -652,6 +769,160 @@ export default function DebtManager() {
             </div>
           )}
         </Form>
+      </Modal>
+
+      {/* 还款记录 Drawer */}
+      <Drawer
+        title={
+          <span>
+            <FileTextOutlined style={{ marginRight: 6, color: COLORS.primary }} />
+            「{drawerDebt?.name}」还款记录
+          </span>
+        }
+        open={!!drawerDebt}
+        onClose={closePaymentDrawer}
+        width={screens.md ? 720 : '100%'}
+        extra={
+          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openNewPayment}>补录还款</Button>
+        }
+      >
+        {drawerDebt && (
+          <>
+            <Row gutter={SPACING.sm} style={{ marginBottom: SPACING.md }}>
+              <Col span={12} style={{ marginBottom: SPACING.sm }}>
+                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgPrimaryLight }}>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计还款总额</div>
+                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.primary, marginTop: 2 }}>¥{formatMoney(repaySummary.total)}</div>
+                </div>
+              </Col>
+              <Col span={12} style={{ marginBottom: SPACING.sm }}>
+                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgSuccessLight }}>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计本金（还款次数 {repaySummary.count}）</div>
+                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.success, marginTop: 2 }}>¥{formatMoney(repaySummary.principal)}</div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgWarningLight }}>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计利息支出</div>
+                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.warning, marginTop: 2 }}>¥{formatMoney(repaySummary.interest)}</div>
+                </div>
+              </Col>
+              <Col span={12}>
+                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgDangerLight }}>
+                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>当前剩余金额</div>
+                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.danger, marginTop: 2 }}>¥{formatMoney(debts.find(d => d.id === drawerDebt.id)?.remainingAmount ?? drawerDebt.remaining)}</div>
+                </div>
+              </Col>
+            </Row>
+            <Divider style={{ margin: '8px 0 12px' }} />
+            {debtRepayTxs.length === 0 ? (
+              <EmptyState description="暂无还款记录，点击右上角「补录还款」可以手动补录历史还款。" />
+            ) : (
+              <Table
+                size="small"
+                dataSource={debtRepayTxs}
+                rowKey="id"
+                pagination={{ pageSize: 10, showSizeChanger: false, showTotal: (total) => `共 ${total} 条` }}
+                scroll={{ x: 'max-content' }}
+                columns={[
+                  {
+                    title: '还款时间',
+                    dataIndex: 'created_at',
+                    key: 'created_at',
+                    width: 170,
+                    render: (v: string) => <span style={{ fontSize: FONT.tableCell }}>{v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'}</span>
+                  },
+                  {
+                    title: '还款总额',
+                    dataIndex: 'amount',
+                    key: 'amount',
+                    width: 110,
+                    align: 'right',
+                    render: (v: number) => <span style={{ fontSize: FONT.tableCell, fontWeight: 500, color: COLORS.primary }}>¥{formatMoney(v)}</span>
+                  },
+                  {
+                    title: '本金',
+                    dataIndex: 'principal_portion',
+                    key: 'principal_portion',
+                    width: 100,
+                    align: 'right',
+                    render: (v: number) => <span style={{ fontSize: FONT.tableCell, color: COLORS.success }}>¥{formatMoney(v)}</span>
+                  },
+                  {
+                    title: '利息',
+                    dataIndex: 'interest_portion',
+                    key: 'interest_portion',
+                    width: 100,
+                    align: 'right',
+                    render: (v: number) => <span style={{ fontSize: FONT.tableCell, color: COLORS.warning }}>¥{formatMoney(v)}</span>
+                  },
+                  {
+                    title: '还款后剩余',
+                    dataIndex: 'remaining_after',
+                    key: 'remaining_after',
+                    width: 110,
+                    align: 'right',
+                    render: (v: number) => <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>¥{formatMoney(v)}</span>
+                  },
+                  {
+                    title: '备注',
+                    dataIndex: 'note',
+                    key: 'note',
+                    ellipsis: true,
+                    render: (v: string) => <span title={v || ''} style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{v || '-'}</span>
+                  },
+                  {
+                    title: '操作',
+                    key: 'action',
+                    width: 120,
+                    fixed: 'right' as const,
+                    render: (_: any, r: any) => (
+                      <Space size={0} wrap={false}>
+                        <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditPayment(r)}>编辑</Button>
+                        <Popconfirm title="删除这条还款记录？系统会把本金自动加回债务剩余金额。" onConfirm={() => handlePaymentDelete(r)} okText="确定删除" cancelText="取消">
+                          <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                        </Popconfirm>
+                      </Space>
+                    )
+                  }
+                ]}
+              />
+            )}
+          </>
+        )}
+      </Drawer>
+
+      {/* 补录/编辑还款 Modal */}
+      <Modal
+        title={paymentEditingTx ? '编辑还款记录' : '补录还款记录'}
+        open={paymentModalOpen}
+        onOk={handlePaymentSubmit}
+        onCancel={() => setPaymentModalOpen(false)}
+        okText={paymentEditingTx ? '保存修改' : '确认补录'}
+        destroyOnClose
+      >
+        <Form form={paymentForm} layout="vertical" preserve={false}>
+          <Form.Item label="还款时间" name="createdAt" rules={[{ required: true, message: '请选择还款时间' }]}>
+            <DatePicker showTime style={{ width: '100%' }} format="YYYY-MM-DD HH:mm" />
+          </Form.Item>
+          <Form.Item label="本次还款金额（元）" name="amount" rules={[{ required: true, message: '请输入还款金额' }]}>
+            <InputNumber style={{ width: '100%' }} min={0} step={0.01} placeholder="输入本次还款总额" />
+          </Form.Item>
+          <Form.Item label="其中利息部分（元）" name="interestPortion" tooltip="本次还款中包含的利息金额，剩余部分会计入本金">
+            <InputNumber style={{ width: '100%' }} min={0} step={0.01} placeholder="0" />
+          </Form.Item>
+          <Form.Item label="备注" name="note">
+            <Input.TextArea rows={2} placeholder="选填，如：提前还款、违约金等" />
+          </Form.Item>
+        </Form>
+        <Divider style={{ margin: '0 0 12px' }} />
+        <div style={{ fontSize: FONT.bodySmall, color: COLORS.textSecondary }}>
+          {paymentEditingTx ? (
+            <span>修改本金/利息后，系统会自动同步调整对应债务的剩余金额。</span>
+          ) : (
+            <span>补录会立即扣减对应债务的剩余金额（本金部分），并生成一条还款流水。</span>
+          )}
+        </div>
       </Modal>
     </div>
   );

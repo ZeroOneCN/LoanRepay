@@ -18,6 +18,8 @@ import {
   saveTargetDate,
   getAllTransactions,
   addTransaction as dbAddTransaction,
+  updateTransaction as dbUpdateTransaction,
+  deleteTransaction as dbDeleteTransaction,
   getAllPlatforms, addPlatform as dbAddPlatform, updatePlatform as dbUpdatePlatform, deletePlatform as dbDeletePlatform,
   getAllAccounts, addAccount as dbAddAccount, updateAccount as dbUpdateAccount, deleteAccount as dbDeleteAccount,
   getAllPnl, addPnl as dbAddPnl, updatePnl as dbUpdatePnl, deletePnl as dbDeletePnl,
@@ -46,6 +48,8 @@ interface AppContextType extends AppState {
   deleteDebt: (id: string) => Promise<void>;
   repayDebt: (id: string, amount: number, interestPortion: number) => Promise<void>;
   recordTransaction: (tx: Omit<Transaction, 'id' | 'created_at'>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
   addAsset: (asset: Omit<Asset, 'id' | 'createdAt'>) => Promise<void>;
   updateAsset: (id: string, asset: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
@@ -297,6 +301,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteTransaction = async (id: string) => {
+    let deleted: any;
+    try {
+      deleted = await dbDeleteTransaction(id);
+    } catch (e) { throw wrapErr(e, '删除交易记录'); }
+    setTransactions(prev => prev.filter(t => t.id !== id));
+    // 若删除的是 type=repay，后端已自动把 debt 的 remainingAmount 加回本金，同步 debts 状态
+    const tx: Transaction | undefined = (deleted as any)?.tx;
+    if (tx && tx.type === 'repay' && tx.debt_id && typeof tx.principal_portion === 'number') {
+      setDebts(prev => prev.map(d => d.id === tx.debt_id ? { ...d, remainingAmount: d.remainingAmount + tx.principal_portion } : d));
+    }
+  };
+
+  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    const oldTx = transactions.find(t => t.id === id);
+    try { await dbUpdateTransaction(id, updates); } catch (e) { throw wrapErr(e, '更新交易记录'); }
+    const newTx: Transaction = { ...(oldTx as Transaction), ...updates };
+    setTransactions(prev => prev.map(t => t.id === id ? newTx : t));
+    // 仅 type=repay：若 amount/principal/interest 变化，重算 debt.remainingAmount
+    // 简化处理：根据 oldTx.principal_portion 和 newTx.principal_portion 的差额，调整 remainingAmount
+    if (oldTx && newTx && newTx.type === 'repay' && newTx.debt_id
+        && typeof oldTx.principal_portion === 'number'
+        && typeof newTx.principal_portion === 'number') {
+      const diff = newTx.principal_portion - oldTx.principal_portion; // diff>0 表示多还了，remaining 再减一点
+      if (diff !== 0) {
+        setDebts(prev => prev.map(d => d.id === newTx.debt_id ? { ...d, remainingAmount: Math.max(0, d.remainingAmount - diff) } : d));
+        // 同步写库（保证刷新后也生效）
+        try {
+          const curDebt = debts.find(d => d.id === newTx.debt_id);
+          if (curDebt) {
+            const newRemaining = Math.max(0, curDebt.remainingAmount - diff);
+            await dbUpdateDebt(curDebt.id, { remainingAmount: newRemaining });
+          }
+        } catch (e) {
+          console.warn('更新债务剩余金额失败，建议在债务管理中手动编辑：', e);
+        }
+      }
+    }
+  };
+
   const addAsset = async (asset: Omit<Asset, 'id' | 'createdAt'>) => {
     const newAsset: Asset = {
       ...asset,
@@ -470,6 +514,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteDebt,
       repayDebt,
       recordTransaction,
+      deleteTransaction,
+      updateTransaction,
       addAsset,
       updateAsset,
       deleteAsset,

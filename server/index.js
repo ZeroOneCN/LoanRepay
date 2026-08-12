@@ -229,10 +229,33 @@ app.post('/api/transactions', (req, res) => {
   }
 });
 
+app.put('/api/transactions/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const fields = Object.keys(req.body).filter(k => k !== 'id');
+    if (fields.length === 0) return res.json({ success: true });
+    const setClause = fields.map(k => `${k} = ?`).join(', ');
+    const values = fields.map(k => req.body[k]);
+    db.prepare(`UPDATE transactions SET ${setClause} WHERE id = ?`).run(...values, id);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/transactions/:id', (req, res) => {
   try {
+    const tx = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.id);
     db.prepare('DELETE FROM transactions WHERE id = ?').run(req.params.id);
-    res.json({ success: true });
+    // 若是还款记录 (type=repay)，则把 debt 的剩余金额加回本金部分（保持业务一致）
+    if (tx && tx.type === 'repay' && tx.debt_id && typeof tx.principal_portion === 'number') {
+      const debt = db.prepare('SELECT remainingAmount FROM debts WHERE id = ?').get(tx.debt_id);
+      if (debt && typeof debt.remainingAmount === 'number') {
+        const newRemaining = debt.remainingAmount + tx.principal_portion;
+        db.prepare('UPDATE debts SET remainingAmount = ? WHERE id = ?').run(newRemaining, tx.debt_id);
+      }
+    }
+    res.json({ success: true, tx });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

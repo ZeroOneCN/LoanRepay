@@ -156,9 +156,17 @@ export async function addTransaction(transaction: Transaction): Promise<void> {
   });
 }
 
-export async function deleteTransaction(id: string): Promise<void> {
-  await fetchApi(`${API_BASE}/transactions/${id}`, {
+export async function deleteTransaction(id: string): Promise<any> {
+  return fetchApi(`${API_BASE}/transactions/${id}`, {
     method: 'DELETE'
+  });
+}
+
+export async function updateTransaction(id: string, updates: Partial<Transaction>): Promise<void> {
+  await fetchApi(`${API_BASE}/transactions/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(updates)
   });
 }
 
