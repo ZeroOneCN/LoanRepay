@@ -30,26 +30,43 @@ export default function Dashboard() {
     ? highLiquidityAsset / incomeConfig.monthlyExpense
     : 0;
 
+  // 饼图数据聚合工具：超过 8 项时，小金额合并为「其他」
+  const aggregatePieData = (rawData: Array<{ name: string; value: number }>, topN = 8) => {
+    if (rawData.length <= topN) return rawData;
+    const sorted = [...rawData].sort((a, b) => b.value - a.value);
+    const top = sorted.slice(0, topN);
+    const others = sorted.slice(topN);
+    const othersSum = others.reduce((s, i) => s + i.value, 0);
+    return [...top, { name: `其他（${others.length}项）`, value: othersSum }];
+  };
+
   const debtPieOption = useMemo(() => {
     if (debts.length === 0) return {};
-    const data = debts.map(d => ({ name: d.name, value: d.remainingAmount }));
+    const rawData = debts.map(d => ({ name: d.name, value: d.remainingAmount }));
+    const data = aggregatePieData(rawData);
     return {
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => `${params.name}<br/>¥${formatMoney(params.value)} (${params.percent}%)`
       },
       legend: {
-        orient: 'horizontal',
-        bottom: 0,
+        type: 'scroll',
+        orient: 'vertical',
+        right: 10,
+        top: 'middle',
         textStyle: { fontSize: 12 },
         itemWidth: 14,
-        itemHeight: 10
+        itemHeight: 10,
+        pageTextStyle: { fontSize: 11, color: COLORS.textSecondary },
+        pageIconColor: COLORS.primary,
+        pageIconInactiveColor: COLORS.border,
       },
+      grid: { left: '10%', right: '40%', top: '5%', bottom: '5%', containLabel: false },
       series: [{
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '45%'],
-        avoidLabelOverlap: false,
+        radius: ['50%', '75%'],
+        center: ['32%', '50%'],
+        avoidLabelOverlap: true,
         itemStyle: { borderRadius: 0, borderColor: '#fff', borderWidth: 2 },
         label: { show: false },
         emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
@@ -61,24 +78,31 @@ export default function Dashboard() {
 
   const assetPieOption = useMemo(() => {
     if (assets.length === 0) return {};
-    const data = assets.map(a => ({ name: a.name, value: a.amount }));
+    const rawData = assets.map(a => ({ name: a.name, value: a.amount }));
+    const data = aggregatePieData(rawData);
     return {
       tooltip: {
         trigger: 'item',
         formatter: (params: any) => `${params.name}<br/>¥${formatMoney(params.value)} (${params.percent}%)`
       },
       legend: {
-        orient: 'horizontal',
-        bottom: 0,
+        type: 'scroll',
+        orient: 'vertical',
+        right: 10,
+        top: 'middle',
         textStyle: { fontSize: 12 },
         itemWidth: 14,
-        itemHeight: 10
+        itemHeight: 10,
+        pageTextStyle: { fontSize: 11, color: COLORS.textSecondary },
+        pageIconColor: COLORS.primary,
+        pageIconInactiveColor: COLORS.border,
       },
+      grid: { left: '10%', right: '40%', top: '5%', bottom: '5%', containLabel: false },
       series: [{
         type: 'pie',
-        radius: ['45%', '70%'],
-        center: ['50%', '45%'],
-        avoidLabelOverlap: false,
+        radius: ['50%', '75%'],
+        center: ['32%', '50%'],
+        avoidLabelOverlap: true,
         itemStyle: { borderRadius: 0, borderColor: '#fff', borderWidth: 2 },
         label: { show: false },
         emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
@@ -240,34 +264,23 @@ export default function Dashboard() {
         </Col>
 
         <Col xs={24} md={12}>
-          <SectionCard title="资产负债分布">
-            {debts.length === 0 && assets.length === 0 ? (
+          {/* 负债分布 */}
+          {debts.length > 0 && (
+            <SectionCard title={`负债分布（共${debts.length}项）`} style={{ marginBottom: SPACING.lg }}>
+              <ReactECharts option={debtPieOption} style={{ height: 300 }} notMerge={true} />
+            </SectionCard>
+          )}
+          {/* 资产分布 */}
+          {assets.length > 0 && (
+            <SectionCard title={`资产分布（共${assets.length}项）`}>
+              <ReactECharts option={assetPieOption} style={{ height: 300 }} notMerge={true} />
+            </SectionCard>
+          )}
+          {debts.length === 0 && assets.length === 0 && (
+            <SectionCard title="资产负债分布">
               <EmptyState description="暂无资产负债数据" />
-            ) : (
-              <Row gutter={SPACING.lg}>
-                {debts.length > 0 && (
-                  <Col span={12}>
-                    <ReactECharts option={debtPieOption} style={{ height: 220 }} notMerge={true} />
-                  </Col>
-                )}
-                {assets.length > 0 && (
-                  <Col span={12}>
-                    <ReactECharts option={assetPieOption} style={{ height: 220 }} notMerge={true} />
-                  </Col>
-                )}
-                {debts.length > 0 && assets.length === 0 && (
-                  <Col span={12}>
-                    <EmptyState description="暂无资产数据" />
-                  </Col>
-                )}
-                {debts.length === 0 && assets.length > 0 && (
-                  <Col span={12}>
-                    <EmptyState description="暂无债务数据" />
-                  </Col>
-                )}
-              </Row>
-            )}
-          </SectionCard>
+            </SectionCard>
+          )}
         </Col>
       </Row>
 
