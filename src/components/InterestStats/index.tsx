@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Row, Col, Table, Tag, Space, Button, Modal, Form, InputNumber, Select, Input, message } from 'antd';
-import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined, PlusOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Row, Col, Table, Tag, Space, Button, Modal, Form, InputNumber, Select, Input, Popconfirm, message } from 'antd';
+import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined, PlusOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
@@ -32,7 +32,7 @@ const txTypeColor: Record<string, string> = {
 
 export default function InterestStats() {
   const navigate = useNavigate();
-  const { transactions, debts, recordTransaction } = useApp();
+  const { transactions, debts, recordTransaction, deleteTransaction } = useApp();
   const [interestModalOpen, setInterestModalOpen] = useState(false);
   const [interestForm] = Form.useForm<InterestFormValues>();
 
@@ -72,6 +72,15 @@ export default function InterestStats() {
       setInterestModalOpen(false);
     } catch (e: any) {
       message.error(e?.message || '录入失败，请检查后端服务是否启动');
+    }
+  };
+
+  const handleDeleteInterestTx = async (txId: string) => {
+    try {
+      await deleteTransaction(txId);
+      message.success('未支付利息记录已删除');
+    } catch (e: any) {
+      message.error(e?.message || '删除失败');
     }
   };
 
@@ -221,6 +230,25 @@ export default function InterestStats() {
       key: 'note',
       ellipsis: true,
       render: (val: string) => <span style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>{val || '-'}</span>
+    },
+    {
+      title: '操作',
+      key: 'action',
+      width: 80,
+      fixed: 'right' as const,
+      render: (_: any, record: any) => {
+        if (record.type !== 'interest') return null;
+        return (
+          <Popconfirm
+            title="删除这条未支付利息记录？此操作不会影响债务余额。"
+            onConfirm={() => handleDeleteInterestTx(record.id)}
+            okText="确定删除"
+            cancelText="取消"
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
+          </Popconfirm>
+        );
+      }
     },
   ];
 

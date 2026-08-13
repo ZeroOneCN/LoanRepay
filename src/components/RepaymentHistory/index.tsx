@@ -33,6 +33,22 @@ export default function RepaymentHistory() {
   const [paymentEditingTx, setPaymentEditingTx] = useState<Transaction | null>(null);
   const [paymentForm] = Form.useForm<PaymentFormValues>();
 
+  // 打开编辑时，Modal 渲染完成后填充表单值
+  const handleEditPayment = (tx: Transaction) => {
+    setPaymentEditingTx(tx);
+    setPaymentModalOpen(true);
+    // 延迟到 Modal 渲染完成后设置表单值
+    setTimeout(() => {
+      paymentForm.setFieldsValue({
+        debt_id: tx.debt_id,
+        amount: tx.amount,
+        interestPortion: tx.interest_portion || 0,
+        note: tx.note,
+        createdAt: tx.created_at ? dayjs(tx.created_at) : dayjs()
+      });
+    }, 50);
+  };
+
   const repayTransactions = useMemo(() => {
     let list = transactions.filter(t => t.type === 'repay');
     if (searchText.trim()) {
@@ -55,26 +71,16 @@ export default function RepaymentHistory() {
   const openNewPayment = () => {
     setPaymentEditingTx(null);
     paymentForm.resetFields();
-    paymentForm.setFieldsValue({
-      debt_id: debts[0]?.id,
-      amount: undefined,
-      interestPortion: 0,
-      note: undefined,
-      createdAt: dayjs()
-    });
     setPaymentModalOpen(true);
-  };
-
-  const openEditPayment = (tx: Transaction) => {
-    setPaymentEditingTx(tx);
-    paymentForm.setFieldsValue({
-      debt_id: tx.debt_id,
-      amount: tx.amount,
-      interestPortion: tx.interest_portion || 0,
-      note: tx.note,
-      createdAt: tx.created_at ? dayjs(tx.created_at) : dayjs()
-    });
-    setPaymentModalOpen(true);
+    setTimeout(() => {
+      paymentForm.setFieldsValue({
+        debt_id: debts[0]?.id,
+        amount: undefined,
+        interestPortion: 0,
+        note: undefined,
+        createdAt: dayjs()
+      });
+    }, 50);
   };
 
   const handlePaymentDelete = async (tx: Transaction) => {
@@ -198,7 +204,7 @@ export default function RepaymentHistory() {
       fixed: 'right' as const,
       render: (_: any, r: Transaction) => (
         <Space size={0} wrap={false}>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditPayment(r)}>编辑</Button>
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEditPayment(r)}>编辑</Button>
           <Popconfirm title="删除这条还款记录？系统会把本金自动加回债务剩余金额。" onConfirm={() => handlePaymentDelete(r)} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
