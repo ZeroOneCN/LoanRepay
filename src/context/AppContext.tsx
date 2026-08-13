@@ -304,15 +304,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteTransaction = async (id: string) => {
-    let deleted: any;
+    // 先取出本地 state 里的记录（用于回滚），再调服务端删除
+    const txToDelete = transactions.find(t => t.id === id);
     try {
-      deleted = await dbDeleteTransaction(id);
+      await dbDeleteTransaction(id);
     } catch (e) { throw wrapErr(e, '删除交易记录'); }
     setTransactions(prev => prev.filter(t => t.id !== id));
-    // 若删除的是 type=repay，后端已自动把 debt 的 remainingAmount 加回本金，同步 debts 状态
-    const tx: Transaction | undefined = (deleted as any)?.tx;
-    if (tx && tx.type === 'repay' && tx.debt_id && typeof tx.principal_portion === 'number') {
-      setDebts(prev => prev.map(d => d.id === tx.debt_id ? { ...d, remainingAmount: d.remainingAmount + tx.principal_portion } : d));
+    // 使用本地 state 数据（而非服务端返回的 tx）更新 debts 状态，更可靠
+    if (txToDelete && txToDelete.type === 'repay' && txToDelete.debt_id && typeof txToDelete.principal_portion === 'number') {
+      setDebts(prev => prev.map(d => d.id === txToDelete.debt_id ? { ...d, remainingAmount: d.remainingAmount + txToDelete.principal_portion } : d));
     }
   };
 
