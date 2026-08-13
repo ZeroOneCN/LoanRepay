@@ -189,9 +189,9 @@ export default function DebtManager() {
 
   const handleRepaySubmit = async () => {
     if (repayAmount <= 0) { message.warning('请输入有效还款金额'); return; }
-    if (repayAmount > repayModal.remaining) { message.warning('还款金额不能超过剩余金额'); return; }
     if (repayInterest > repayAmount) { message.warning('利息部分不能超过还款总额'); return; }
     const principalPortion = repayAmount - repayInterest;
+    if (principalPortion > repayModal.remaining) { message.warning('本金部分（还款总额 - 利息）不能超过剩余金额'); return; }
     const newRemaining = repayModal.remaining - principalPortion;
     try {
       await repayDebt(repayModal.debtId, repayAmount, repayInterest);
@@ -728,10 +728,9 @@ export default function DebtManager() {
             <InputNumber
               style={{ width: '100%' }}
               min={0}
-              max={repayModal.remaining}
               value={repayAmount}
               onChange={(v) => setRepayAmount(v ?? 0)}
-              placeholder="输入还款总额"
+              placeholder="输入还款总额（含利息）"
             />
           </Form.Item>
           <Form.Item label={
