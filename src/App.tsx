@@ -16,7 +16,7 @@ import DebtCenter from './components/DebtCenter';
 import FinanceCenter from './components/FinanceCenter';
 import StrategyCenter from './components/StrategyCenter';
 import InvestLedger from './components/InvestLedger';
-import { COLORS, FONT, FONT_WEIGHT, SPACING } from './styles/theme';
+import { COLORS, FONT, FONT_WEIGHT, SPACING, CARD_SHADOW } from './styles/theme';
 
 const { Header, Sider, Content } = Layout;
 
@@ -48,7 +48,13 @@ function AppContent() {
         collapsible
         collapsed={collapsed}
         theme="light"
-        style={{ height: '100vh', overflowY: 'auto', borderRight: `1px solid ${COLORS.border}` }}
+        style={{
+          height: '100vh',
+          overflowY: 'auto',
+          borderRight: `1px solid ${COLORS.border}`,
+          boxShadow: CARD_SHADOW,
+          zIndex: 10,
+        }}
       >
         <div style={{
           height: 56,
@@ -70,7 +76,11 @@ function AppContent() {
           mode="inline"
           selectedKeys={[activeKey]}
           items={MENU_ITEMS}
-          onClick={({ key }) => navigate(key)}
+          onClick={({ key }) => {
+            if (key === '/debt') navigate('/debt/manage');
+            else if (key === '/invest') navigate('/invest/overview');
+            else navigate(key);
+          }}
           style={{ borderRight: 0 }}
         />
       </Sider>
@@ -84,6 +94,8 @@ function AppContent() {
           flexShrink: 0,
           height: 56,
           borderBottom: `1px solid ${COLORS.border}`,
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          zIndex: 9,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: SPACING.md }}>
             {collapsed ? (

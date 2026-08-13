@@ -1,5 +1,5 @@
 import { Card } from 'antd';
-import { FONT, FONT_WEIGHT, COLORS, SPACING } from '../../styles/theme';
+import { FONT, FONT_WEIGHT, COLORS, SPACING, CARD_SHADOW } from '../../styles/theme';
 
 interface SectionCardProps {
   title: string;
@@ -17,6 +17,7 @@ export default function SectionCard({ title, extra, children, style, bodyStyle }
         borderRadius: 8,
         border: 'none',
         background: COLORS.bgCard,
+        boxShadow: CARD_SHADOW,
         ...style,
       }}
       styles={{

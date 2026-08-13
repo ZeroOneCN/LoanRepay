@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Tabs, Select, Tooltip } from 'antd';
 import { BarChartOutlined, UnorderedListOutlined, AppstoreOutlined, SwapOutlined, FundOutlined } from '@ant-design/icons';
 import PnlOverview from './PnlOverview';
@@ -17,10 +18,28 @@ type TabKey = 'overview' | 'records' | 'platforms' | 'rates';
 const DISPLAY_CURRENCIES: Currency[] = ['CNY', 'USD', 'HKD', 'USDT'];
 
 export default function InvestLedger() {
-  const [activeKey, setActiveKey] = useState<TabKey>('overview');
+  const navigate = useNavigate();
+  const location = useLocation();
   const { displayCurrency, setDisplayCurrency, fxRates } = useApp();
 
-  // 缺失汇率提示（切换到非 CNY 时用到哪些汇率不可用）
+  // 从 URL 推断当前 Tab
+  const activeKey: TabKey = (() => {
+    const path = location.pathname;
+    if (path.endsWith('/records')) return 'records';
+    if (path.endsWith('/platforms')) return 'platforms';
+    if (path.endsWith('/rates')) return 'rates';
+    return 'overview';
+  })();
+
+  // 根路径重定向到 overview
+  useEffect(() => {
+    const path = location.pathname.replace(/\/+$/, '');
+    if (path === '/invest' || path === '') {
+      navigate('/invest/overview', { replace: true });
+    }
+  }, []);
+
+  // 缺失汇率提示
   const missingForDisplay = displayCurrency !== 'CNY' && !fxRates.find(r => r.from === displayCurrency);
 
   return (
@@ -56,10 +75,10 @@ export default function InvestLedger() {
       />
       <Tabs
         activeKey={activeKey}
-        onChange={(k) => setActiveKey(k as TabKey)}
+        onChange={(k) => navigate(`/invest/${k}`)}
         style={{ marginTop: SPACING.lg }}
         items={[
-          { key: 'overview', label: '盈亏总览', icon: <BarChartOutlined />, children: <PnlOverview onGotoRecords={() => setActiveKey('records')} /> },
+          { key: 'overview', label: '盈亏总览', icon: <BarChartOutlined />, children: <PnlOverview onGotoRecords={() => navigate('/invest/records')} /> },
           { key: 'records', label: '盈亏记录', icon: <UnorderedListOutlined />, children: <PnlRecords /> },
           { key: 'platforms', label: '平台管理', icon: <AppstoreOutlined />, children: <PlatformManager /> },
           { key: 'rates', label: '汇率设置', icon: <SwapOutlined />, children: <RateSettings /> },

@@ -46,6 +46,9 @@ export const COLORS = {
   purple: '#722ed1',
 } as const;
 
+/** 卡片阴影 */
+export const CARD_SHADOW = '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06)';
+
 /** 设计令牌 - 统一间距 */
 export const SPACING = {
   xs: 4,
@@ -124,4 +127,11 @@ export const COMMON_STYLES = {
     color: color || COLORS.textPrimary,
     fontWeight: FONT_WEIGHT.medium,
   }),
+  /** 卡片容器 */
+  cardContainer: {
+    borderRadius: RADIUS.lg,
+    border: 'none',
+    background: COLORS.bgCard,
+    boxShadow: CARD_SHADOW,
+  } as React.CSSProperties,
 } as const;

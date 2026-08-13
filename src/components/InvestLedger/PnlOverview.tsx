@@ -169,8 +169,8 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
         </div>
       )}
 
-      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
-        <Col xs={24} sm={12} md={6}>
+      <div style={{ display: 'flex', gap: SPACING.lg, marginBottom: SPACING.lg, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <StatisticCard
             title={`累计总盈亏（${DC}）`}
             value={stats.totalDisplay}
@@ -179,8 +179,8 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
             suffix={DC}
             color={stats.totalDisplay >= 0 ? COLORS.success : COLORS.danger}
           />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <StatisticCard
             title={`累计盈利（${DC}）`}
             value={stats.profitDisplay}
@@ -189,8 +189,8 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
             suffix={DC}
             color={COLORS.success}
           />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <StatisticCard
             title={`累计亏损（${DC}）`}
             value={stats.lossDisplay}
@@ -199,11 +199,11 @@ export default function PnlOverview({ onGotoRecords }: { onGotoRecords: () => vo
             suffix={DC}
             color={COLORS.danger}
           />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
+        </div>
+        <div style={{ flex: 1, minWidth: 180 }}>
           <StatisticCard title="盈亏记录数" value={pnlRecords.length} prefix={<DollarOutlined />} suffix="条" color={COLORS.primary} />
-        </Col>
-      </Row>
+        </div>
+      </div>
 
       <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
         <Col xs={24} md={12}>

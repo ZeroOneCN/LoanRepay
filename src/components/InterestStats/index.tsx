@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Row, Col, Table, Tag, Space, Button, Modal, Form, InputNumber, Select, Input, message } from 'antd';
-import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined, PlusOutlined } from '@ant-design/icons';
+import { DollarOutlined, TransactionOutlined, RiseOutlined, FallOutlined, PlusOutlined, HistoryOutlined } from '@ant-design/icons';
 import ReactECharts from 'echarts-for-react';
 import dayjs from 'dayjs';
 import { useApp } from '../../context/AppContext';
@@ -10,6 +11,7 @@ import PageHeader from '../Common/PageHeader';
 import StatisticCard from '../Common/StatisticCard';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
@@ -29,6 +31,7 @@ const txTypeColor: Record<string, string> = {
 };
 
 export default function InterestStats() {
+  const navigate = useNavigate();
   const { transactions, debts, recordTransaction } = useApp();
   const [interestModalOpen, setInterestModalOpen] = useState(false);
   const [interestForm] = Form.useForm<InterestFormValues>();
@@ -164,7 +167,15 @@ export default function InterestStats() {
       dataIndex: 'debt_name',
       key: 'debt_name',
       ellipsis: true,
-      render: (text: string) => <span style={{ fontWeight: 500, fontSize: FONT.tableCell }}>{text}</span>
+      render: (text: string, record: any) => (
+        <a
+          style={{ fontWeight: 500, fontSize: FONT.tableCell, cursor: 'pointer' }}
+          onClick={() => navigate('/debt/history', { state: { debtId: record.debt_id } })}
+          title="查看该债务的还款记录"
+        >
+          {text}
+        </a>
+      )
     },
     {
       title: '类型',
@@ -219,16 +230,19 @@ export default function InterestStats() {
     <div>
       <PageHeader
         title="利息统计"
-        subtitle="还款利息分析与交易记录"
+        subtitle="还款利息分析与交易记录（点击债务名称可查看还款记录）"
         extra={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleOpenInterestModal}
-            disabled={debts.length === 0}
-          >
-            录入未支付利息
-          </Button>
+          <Space>
+            <Button icon={<HistoryOutlined />} onClick={() => navigate('/debt/history')}>还款记录</Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleOpenInterestModal}
+              disabled={debts.length === 0}
+            >
+              录入未支付利息
+            </Button>
+          </Space>
         }
       />
 
@@ -236,24 +250,14 @@ export default function InterestStats() {
         <EmptyState description="暂无交易记录，还款或新增债务后将自动记录" />
       ) : (
         <>
-      {/* 统计卡片 */}
-      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="累计利息支出" value={stats.totalInterest} precision={2} prefix={<RiseOutlined />} suffix="元" color={COLORS.warning} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="未支付利息（已含在欠款中）" value={stats.unpaidInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="累计还款本金" value={stats.totalPrincipal} precision={2} prefix={<FallOutlined />} suffix="元" color={COLORS.success} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="累计还款总额" value={stats.totalRepaid} precision={2} prefix={<TransactionOutlined />} suffix="元" color={COLORS.primary} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="本月利息" value={stats.monthInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.warning} />
-        </Col>
-      </Row>
+      {/* 统计卡片 — 一行显示 */}
+      <div style={{ display: 'flex', gap: SPACING.lg, marginBottom: SPACING.lg, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 160 }}><StatisticCard title="累计利息支出" value={stats.totalInterest} precision={2} prefix={<RiseOutlined />} suffix="元" color={COLORS.warning} /></div>
+        <div style={{ flex: 1, minWidth: 160 }}><StatisticCard title="未支付利息" value={stats.unpaidInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.danger} /></div>
+        <div style={{ flex: 1, minWidth: 160 }}><StatisticCard title="累计还款本金" value={stats.totalPrincipal} precision={2} prefix={<FallOutlined />} suffix="元" color={COLORS.success} /></div>
+        <div style={{ flex: 1, minWidth: 160 }}><StatisticCard title="累计还款总额" value={stats.totalRepaid} precision={2} prefix={<TransactionOutlined />} suffix="元" color={COLORS.primary} /></div>
+        <div style={{ flex: 1, minWidth: 160 }}><StatisticCard title="本月利息" value={stats.monthInterest} precision={2} prefix={<DollarOutlined />} suffix="元" color={COLORS.warning} /></div>
+      </div>
 
       {/* 趋势图 + 占比图 */}
       <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
@@ -275,7 +279,7 @@ export default function InterestStats() {
 
       {/* 交易明细 */}
       <SectionCard title={`交易明细（共 ${transactions.length} 条）`}>
-        <Table
+        <PaginatedTable
           columns={columns}
           dataSource={transactions}
           rowKey="id"

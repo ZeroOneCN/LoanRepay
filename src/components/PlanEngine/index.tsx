@@ -8,6 +8,7 @@ import PageHeader from '../Common/PageHeader';
 import StatisticCard from '../Common/StatisticCard';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 import dayjs from 'dayjs';
 
@@ -208,7 +209,7 @@ export default function PlanEngine() {
 
       {viewMode === 'detail' && (
         <SectionCard title="还款明细">
-          <Table
+          <PaginatedTable
             columns={detailColumns}
             dataSource={currentPlan.months}
             rowKey="month"

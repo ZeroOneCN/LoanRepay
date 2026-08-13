@@ -1,5 +1,5 @@
 import { Card, Statistic } from 'antd';
-import { COLORS, RADIUS, SPACING, FONT, FONT_WEIGHT } from '../../styles/theme';
+import { COLORS, RADIUS, SPACING, FONT, FONT_WEIGHT, CARD_SHADOW } from '../../styles/theme';
 
 interface StatisticCardProps {
   title: string;
@@ -34,6 +34,7 @@ export default function StatisticCard({
         borderRadius: RADIUS.lg,
         border: 'none',
         background: COLORS.bgLight,
+        boxShadow: CARD_SHADOW,
         height: '100%',
         transition: 'background 0.2s',
       }}

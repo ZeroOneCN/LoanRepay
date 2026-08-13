@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1677ff"/>
+      <stop offset="100%" style="stop-color:#4096ff"/>
+    </linearGradient>
+  </defs>
+  <!-- 盾牌轮廓 -->
+  <path d="M16 2 L28 8 L28 16 C28 23 22.5 29 16 31 C9.5 29 4 23 4 16 L4 8 Z" fill="url(#g)"/>
+  <!-- 人民币符号 ¥ -->
+  <text x="16" y="22" text-anchor="middle" font-size="18" font-weight="bold" fill="white" font-family="Arial, sans-serif">¥</text>
+</svg>

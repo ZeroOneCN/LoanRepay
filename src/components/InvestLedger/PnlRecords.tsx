@@ -7,6 +7,7 @@ import { Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS, PRODUCT_TY
 import { formatMoney } from '../../utils/repaymentEngine';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
@@ -265,7 +266,7 @@ export default function PnlRecords() {
           onAction={canAdd ? openAdd : undefined}
         />
       ) : (
-        <Table
+        <PaginatedTable
           columns={columns}
           dataSource={filteredRecords}
           rowKey="id"

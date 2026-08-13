@@ -148,21 +148,13 @@ export default function Dashboard() {
     <div>
       <PageHeader title="财务总览" subtitle="整体财务状况与还款进度一览" />
 
-      {/* 统计卡片 */}
-      <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="总资产" value={totalAsset} precision={2} prefix={<BankOutlined />} suffix="元" color={COLORS.success} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="总负债" value={totalDebt} precision={2} prefix={<RedEnvelopeOutlined />} suffix="元" color={COLORS.danger} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="净资产" value={netWorth} precision={2} prefix={<DollarOutlined />} suffix="元" color={netWorth >= 0 ? COLORS.primary : COLORS.danger} />
-        </Col>
-        <Col xs={24} sm={12} md={6}>
-          <StatisticCard title="负债率" value={debtRatio} precision={1} prefix={<CalculatorOutlined />} suffix="%" color={debtRatio > 70 ? COLORS.danger : debtRatio > 40 ? COLORS.warning : COLORS.success} />
-        </Col>
-      </Row>
+      {/* 统计卡片 — 一行显示 */}
+      <div style={{ display: 'flex', gap: SPACING.lg, marginBottom: SPACING.lg, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 180 }}><StatisticCard title="总资产" value={totalAsset} precision={2} prefix={<BankOutlined />} suffix="元" color={COLORS.success} /></div>
+        <div style={{ flex: 1, minWidth: 180 }}><StatisticCard title="总负债" value={totalDebt} precision={2} prefix={<RedEnvelopeOutlined />} suffix="元" color={COLORS.danger} /></div>
+        <div style={{ flex: 1, minWidth: 180 }}><StatisticCard title="净资产" value={netWorth} precision={2} prefix={<DollarOutlined />} suffix="元" color={netWorth >= 0 ? COLORS.primary : COLORS.danger} /></div>
+        <div style={{ flex: 1, minWidth: 180 }}><StatisticCard title="负债率" value={debtRatio} precision={1} prefix={<CalculatorOutlined />} suffix="%" color={debtRatio > 70 ? COLORS.danger : debtRatio > 40 ? COLORS.warning : COLORS.success} /></div>
+      </div>
 
       {/* 财务健康度 + 分布图 */}
       <Row gutter={[SPACING.lg, SPACING.lg]} style={{ marginBottom: SPACING.lg }}>

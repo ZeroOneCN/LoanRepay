@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { InvestMarket, INVEST_MARKET_LABELS, Currency, CURRENCY_LABELS, ProductType, PRODUCT_TYPE_LABELS, PRODUCT_TYPE_COLORS } from '../../types';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT } from '../../styles/theme';
 
 const { Option } = Select;
@@ -309,7 +310,7 @@ export default function PlatformManager() {
                 {platforms.length === 0 ? (
                   <EmptyState description="暂无平台，点击「添加平台」开始" actionText="添加平台" onAction={openAddP} />
                 ) : (
-                  <Table columns={platformColumns} dataSource={platforms} rowKey="id" pagination={false} size="middle" scroll={{ x: 'max-content' }} />
+                  <PaginatedTable columns={platformColumns} dataSource={platforms} rowKey="id" size="middle" scroll={{ x: 'max-content' }} />
                 )}
               </SectionCard>
             )
@@ -338,7 +339,7 @@ export default function PlatformManager() {
                     onAction={platforms.length > 0 ? () => openAddA() : undefined}
                   />
                 ) : (
-                  <Table columns={accountColumns} dataSource={filteredAccounts} rowKey="id" pagination={false} size="middle" scroll={{ x: 'max-content' }} />
+                  <PaginatedTable columns={accountColumns} dataSource={filteredAccounts} rowKey="id" size="middle" scroll={{ x: 'max-content' }} />
                 )}
               </SectionCard>
             )

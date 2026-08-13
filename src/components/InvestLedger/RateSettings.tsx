@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { Currency, CURRENCY_LABELS } from '../../types';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT } from '../../styles/theme';
 
 const { Option } = Select;
@@ -133,11 +134,10 @@ export default function RateSettings() {
           onAction={availableCurrencies.length > 0 ? openAdd : undefined}
         />
       ) : (
-        <Table
+        <PaginatedTable
           columns={columns}
           dataSource={fxRates}
           rowKey="id"
-          pagination={false}
           size="middle"
         />
       )}

@@ -9,6 +9,7 @@ import PageHeader from '../Common/PageHeader';
 import StatisticCard from '../Common/StatisticCard';
 import SectionCard from '../Common/SectionCard';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 
 const { TabPane } = Tabs;
@@ -242,7 +243,7 @@ export default function DebtRestructure() {
           />
 
           <SectionCard title="常见借新还旧场景">
-            <Table
+            <PaginatedTable
               columns={[
                 { title: '场景', dataIndex: 'name', key: 'name', render: (t: string) => <span style={{ fontWeight: 500, fontSize: FONT.body }}>{t}</span> },
                 { title: '说明', dataIndex: 'desc', key: 'desc', render: (t: string) => <span style={{ fontSize: FONT.bodySmall, color: COLORS.textSecondary }}>{t}</span> },
@@ -250,7 +251,6 @@ export default function DebtRestructure() {
               ]}
               dataSource={borrowScenarios}
               rowKey="name"
-              pagination={false}
               size="small"
             />
           </SectionCard>

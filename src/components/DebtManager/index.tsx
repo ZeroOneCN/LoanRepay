@@ -1,12 +1,13 @@
 import { useState, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, Popconfirm, Tag, Space, Row, Col, DatePicker, message, Dropdown, Input as AntInput, Grid, Drawer, Divider } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined, FileTextOutlined } from '@ant-design/icons';
-import { TransactionOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, MoreOutlined, SearchOutlined, FileTextOutlined, TransactionOutlined } from '@ant-design/icons';
 import { useApp } from '../../context/AppContext';
 import { DEFAULT_DEBT_TYPES, REPAYMENT_TYPE_LABELS, RepaymentType, Transaction } from '../../types';
 import { formatMoney, calculateMonthlyInterest } from '../../utils/repaymentEngine';
 import PageHeader from '../Common/PageHeader';
 import EmptyState from '../Common/EmptyState';
+import PaginatedTable from '../Common/PaginatedTable';
 import { COLORS, FONT, SPACING } from '../../styles/theme';
 import dayjs from 'dayjs';
 import * as XLSX from 'xlsx';
@@ -40,6 +41,7 @@ interface PaymentFormValues {
 }
 
 export default function DebtManager() {
+  const navigate = useNavigate();
   const { debts, addDebt, updateDebt, deleteDebt, repayDebt, totalDebt, transactions, recordTransaction, updateTransaction, deleteTransaction } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -422,7 +424,7 @@ export default function DebtManager() {
       render: (_: any, record: any) => (
         <Space size={0} wrap={false}>
           <Button type="link" size="small" onClick={() => handleRepay(record)} style={{ padding: '0 4px' }}>还款</Button>
-          <Button type="link" size="small" onClick={() => openPaymentDrawer(record)} style={{ padding: '0 4px' }}>记录</Button>
+          <Button type="link" size="small" onClick={() => navigate('/debt/history', { state: { debtId: record.id } })} style={{ padding: '0 4px' }}>记录</Button>
           <Button type="link" size="small" onClick={() => handleEdit(record)} style={{ padding: '0 4px' }}>编辑</Button>
           <Popconfirm title="确定删除？删除后历史还款记录将保留在交易记录中（未记账的部分可单独删除）。" onConfirm={async () => { try { await deleteDebt(record.id); message.success('删除成功'); } catch (e: any) { message.error(e?.message || '删除失败，请检查后端服务是否启动'); } }} okText="确定删除" cancelText="取消">
             <Button type="link" size="small" danger style={{ padding: '0 4px' }}>删除</Button>
@@ -601,7 +603,7 @@ export default function DebtManager() {
         </div>
       ) : (
         /* 桌面端表格 */
-        <Table
+        <PaginatedTable
           columns={columns}
           dataSource={filteredDebts}
           rowKey="id"
@@ -787,37 +789,29 @@ export default function DebtManager() {
       >
         {drawerDebt && (
           <>
-            <Row gutter={SPACING.sm} style={{ marginBottom: SPACING.md }}>
-              <Col span={12} style={{ marginBottom: SPACING.sm }}>
-                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgPrimaryLight }}>
-                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计还款总额</div>
-                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.primary, marginTop: 2 }}>¥{formatMoney(repaySummary.total)}</div>
-                </div>
-              </Col>
-              <Col span={12} style={{ marginBottom: SPACING.sm }}>
-                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgSuccessLight }}>
-                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计本金（还款次数 {repaySummary.count}）</div>
-                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.success, marginTop: 2 }}>¥{formatMoney(repaySummary.principal)}</div>
-                </div>
-              </Col>
-              <Col span={12}>
-                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgWarningLight }}>
-                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计利息支出</div>
-                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.warning, marginTop: 2 }}>¥{formatMoney(repaySummary.interest)}</div>
-                </div>
-              </Col>
-              <Col span={12}>
-                <div style={{ padding: SPACING.md, borderRadius: 8, background: COLORS.bgDangerLight }}>
-                  <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>当前剩余金额</div>
-                  <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.danger, marginTop: 2 }}>¥{formatMoney(debts.find(d => d.id === drawerDebt.id)?.remainingAmount ?? drawerDebt.remaining)}</div>
-                </div>
-              </Col>
-            </Row>
+            <div style={{ display: 'flex', gap: SPACING.sm, marginBottom: SPACING.md, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 140, padding: SPACING.md, borderRadius: 8, background: COLORS.bgPrimaryLight }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计还款总额</div>
+                <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.primary, marginTop: 2 }}>¥{formatMoney(repaySummary.total)}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 140, padding: SPACING.md, borderRadius: 8, background: COLORS.bgSuccessLight }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计本金（{repaySummary.count}次）</div>
+                <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.success, marginTop: 2 }}>¥{formatMoney(repaySummary.principal)}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 140, padding: SPACING.md, borderRadius: 8, background: COLORS.bgWarningLight }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>累计利息支出</div>
+                <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.warning, marginTop: 2 }}>¥{formatMoney(repaySummary.interest)}</div>
+              </div>
+              <div style={{ flex: 1, minWidth: 140, padding: SPACING.md, borderRadius: 8, background: COLORS.bgDangerLight }}>
+                <div style={{ fontSize: FONT.caption, color: COLORS.textTertiary }}>当前剩余金额</div>
+                <div style={{ fontSize: FONT.h2, fontWeight: 600, color: COLORS.danger, marginTop: 2 }}>¥{formatMoney(debts.find(d => d.id === drawerDebt.id)?.remainingAmount ?? drawerDebt.remaining)}</div>
+              </div>
+            </div>
             <Divider style={{ margin: '8px 0 12px' }} />
             {debtRepayTxs.length === 0 ? (
               <EmptyState description="暂无还款记录，点击右上角「补录还款」可以手动补录历史还款。" />
             ) : (
-              <Table
+              <PaginatedTable
                 size="small"
                 dataSource={debtRepayTxs}
                 rowKey="id"
