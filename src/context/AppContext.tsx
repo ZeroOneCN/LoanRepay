@@ -44,7 +44,7 @@ interface AppState {
 
 interface AppContextType extends AppState {
   addDebt: (debt: Omit<Debt, 'id' | 'createdAt'>) => Promise<void>;
-  updateDebt: (id: string, debt: Partial<Debt>) => Promise<void>;
+  updateDebt: (id: string, debt: Partial<Debt>, options?: { recordTx?: boolean }) => Promise<void>;
   deleteDebt: (id: string) => Promise<void>;
   repayDebt: (id: string, amount: number, interestPortion: number) => Promise<void>;
   recordTransaction: (tx: Omit<Transaction, 'id' | 'created_at'>) => Promise<void>;
@@ -196,7 +196,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateDebt = async (id: string, updates: Partial<Debt>) => {
+  const updateDebt = async (id: string, updates: Partial<Debt>, options?: { recordTx?: boolean }) => {
+    const { recordTx = true } = options || {};
     const oldDebt = debts.find(d => d.id === id);
     try {
       await dbUpdateDebt(id, updates);
@@ -204,6 +205,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       throw wrapErr(e, '更新债务');
     }
     setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    if (!recordTx) return;
     // 交易记录辅助，失败不阻断
     try {
       if (oldDebt && updates.remainingAmount !== undefined && updates.remainingAmount !== oldDebt.remainingAmount) {

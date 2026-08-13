@@ -288,7 +288,7 @@ export default function DebtManager() {
           message.warning('补录的还款本金超过债务剩余金额，请调整数值');
           return;
         }
-        await updateDebt(drawerDebt.id, { remainingAmount: Math.max(0, newRemaining) });
+        await updateDebt(drawerDebt.id, { remainingAmount: Math.max(0, newRemaining) }, { recordTx: false });
         await recordTransaction({
           debt_id: drawerDebt.id,
           debt_name: drawerDebt.name,
