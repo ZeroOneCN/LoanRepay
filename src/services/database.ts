@@ -1,4 +1,4 @@
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate, InvestMemo } from '../types';
 
 const API_BASE = '/api';
 
@@ -244,4 +244,26 @@ export async function saveFxRate(r: FxRate): Promise<void> {
 
 export async function deleteFxRate(id: string): Promise<void> {
   await fetchApi(`${API_BASE}/invest/rates/${id}`, { method: 'DELETE' });
+}
+
+// ==================== 投资备忘录相关操作 ====================
+
+export async function getAllMemos(): Promise<InvestMemo[]> {
+  return fetchApi(`${API_BASE}/invest/memos`);
+}
+
+export async function addMemo(m: InvestMemo): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/memos`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(m)
+  });
+}
+
+export async function updateMemo(id: string, updates: Partial<InvestMemo>): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/memos/${id}`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates)
+  });
+}
+
+export async function deleteMemo(id: string): Promise<void> {
+  await fetchApi(`${API_BASE}/invest/memos/${id}`, { method: 'DELETE' });
 }

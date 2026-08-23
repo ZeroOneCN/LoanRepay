@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate, Currency } from '../types';
+import { Debt, Asset, IncomeConfig, RepaymentStrategy, Transaction, InvestPlatform, InvestAccount, PnlRecord, FxRate, Currency, InvestMemo } from '../types';
 import {
   initDatabase,
   getAllDebts,
@@ -24,6 +24,7 @@ import {
   getAllAccounts, addAccount as dbAddAccount, updateAccount as dbUpdateAccount, deleteAccount as dbDeleteAccount,
   getAllPnl, addPnl as dbAddPnl, updatePnl as dbUpdatePnl, deletePnl as dbDeletePnl,
   getAllFxRates, saveFxRate as dbSaveFxRate, deleteFxRate as dbDeleteFxRate,
+  getAllMemos, addMemo as dbAddMemo, updateMemo as dbUpdateMemo, deleteMemo as dbDeleteMemo,
 } from '../services/database';
 import { calculateMonthlyInterest } from '../utils/repaymentEngine';
 
@@ -40,6 +41,7 @@ interface AppState {
   pnlRecords: PnlRecord[];
   fxRates: FxRate[];
   displayCurrency: Currency;
+  memos: InvestMemo[];
 }
 
 interface AppContextType extends AppState {
@@ -74,6 +76,9 @@ interface AppContextType extends AppState {
   setDisplayCurrency: (cur: Currency) => void;
   convertToCNY: (amount: number, from: FxRate['from']) => number;
   convertCurrency: (amount: number, from: Currency, to: Currency) => number;
+  addMemo: (m: Omit<InvestMemo, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateMemo: (id: string, updates: Partial<InvestMemo>) => Promise<void>;
+  deleteMemo: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -97,6 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pnlRecords, setPnlRecords] = useState<PnlRecord[]>([]);
   const [accounts, setAccounts] = useState<InvestAccount[]>([]);
   const [fxRates, setFxRates] = useState<FxRate[]>([]);
+  const [memos, setMemos] = useState<InvestMemo[]>([]);
   // 投资记账页面显示币种（默认 CNY，持久化到 localStorage）
   const [displayCurrency, setDisplayCurrencyState] = useState<Currency>(() => {
     try {
@@ -134,7 +140,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const loadData = async () => {
       try {
         await initDatabase();
-        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx, loadedPlatforms, loadedAccounts, loadedPnl, loadedRates] = await Promise.all([
+        const [loadedDebts, loadedAssets, loadedIncome, loadedStrategy, loadedTargetDate, loadedTx, loadedPlatforms, loadedAccounts, loadedPnl, loadedRates, loadedMemos] = await Promise.all([
           getAllDebts(),
           getAllAssets(),
           getIncomeConfig(),
@@ -144,7 +150,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           getAllPlatforms(),
           getAllAccounts(),
           getAllPnl(),
-          getAllFxRates()
+          getAllFxRates(),
+          getAllMemos()
         ]);
         setDebts(loadedDebts);
         setAssets(loadedAssets);
@@ -156,6 +163,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAccounts(loadedAccounts);
         setPnlRecords(loadedPnl);
         setFxRates(loadedRates);
+        setMemos(loadedMemos);
         setDbReady(true);
       } catch (e) {
         console.error('Failed to load data from SQLite:', e);
@@ -471,6 +479,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setFxRates(prev => prev.filter(r => r.id !== id));
   };
 
+  // ==================== 投资备忘录方法 ====================
+
+  const addMemo = async (m: Omit<InvestMemo, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const now = new Date().toISOString();
+    const newMemo: InvestMemo = {
+      ...m,
+      id: `memo_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      createdAt: now,
+      updatedAt: now,
+    };
+    try { await dbAddMemo(newMemo); } catch (e) { throw wrapErr(e, '添加备忘录'); }
+    setMemos(prev => [newMemo, ...prev]);
+  };
+
+  const updateMemo = async (id: string, updates: Partial<InvestMemo>) => {
+    try { await dbUpdateMemo(id, { ...updates, updatedAt: new Date().toISOString() }); } catch (e) { throw wrapErr(e, '更新备忘录'); }
+    setMemos(prev => prev.map(m => m.id === id ? { ...m, ...updates, updatedAt: new Date().toISOString() } : m));
+  };
+
+  const deleteMemo = async (id: string) => {
+    try { await dbDeleteMemo(id); } catch (e) { throw wrapErr(e, '删除备忘录'); }
+    setMemos(prev => prev.filter(m => m.id !== id));
+  };
+
   const setDisplayCurrency = (cur: Currency) => {
     setDisplayCurrencyState(cur);
     try { localStorage.setItem('displayCurrency', cur); } catch {}
@@ -511,6 +543,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       pnlRecords,
       fxRates,
       displayCurrency,
+      memos,
       addDebt,
       updateDebt,
       deleteDebt,
@@ -540,7 +573,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       deleteFxRate,
       setDisplayCurrency,
       convertToCNY,
-      convertCurrency
+      convertCurrency,
+      addMemo,
+      updateMemo,
+      deleteMemo,
     }}>
       {children}
     </AppContext.Provider>

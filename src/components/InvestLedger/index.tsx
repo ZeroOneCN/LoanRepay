@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Tabs, Select, Tooltip } from 'antd';
-import { BarChartOutlined, UnorderedListOutlined, AppstoreOutlined, SwapOutlined, FundOutlined } from '@ant-design/icons';
+import { Tabs, Select, Tooltip, Badge } from 'antd';
+import { BarChartOutlined, UnorderedListOutlined, AppstoreOutlined, SwapOutlined, FundOutlined, FileTextOutlined } from '@ant-design/icons';
 import PnlOverview from './PnlOverview';
 import PnlRecords from './PnlRecords';
 import PlatformManager from './PlatformManager';
 import RateSettings from './RateSettings';
+import InvestMemoPage from './InvestMemoPage';
 import PageHeader from '../Common/PageHeader';
 import { useApp } from '../../context/AppContext';
 import { Currency } from '../../types';
@@ -13,14 +14,14 @@ import { COLORS, SPACING } from '../../styles/theme';
 
 const { Option } = Select;
 
-type TabKey = 'overview' | 'records' | 'platforms' | 'rates';
+type TabKey = 'overview' | 'records' | 'platforms' | 'rates' | 'memo';
 
 const DISPLAY_CURRENCIES: Currency[] = ['CNY', 'USD', 'HKD', 'USDT'];
 
 export default function InvestLedger() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { displayCurrency, setDisplayCurrency, fxRates } = useApp();
+  const { displayCurrency, setDisplayCurrency, fxRates, memos } = useApp();
 
   // 从 URL 推断当前 Tab
   const activeKey: TabKey = (() => {
@@ -28,6 +29,7 @@ export default function InvestLedger() {
     if (path.endsWith('/records')) return 'records';
     if (path.endsWith('/platforms')) return 'platforms';
     if (path.endsWith('/rates')) return 'rates';
+    if (path.endsWith('/memo')) return 'memo';
     return 'overview';
   })();
 
@@ -41,6 +43,8 @@ export default function InvestLedger() {
 
   // 缺失汇率提示
   const missingForDisplay = displayCurrency !== 'CNY' && !fxRates.find(r => r.from === displayCurrency);
+
+  const pendingMemoCount = memos.filter(m => m.status === 'pending').length;
 
   return (
     <div>
@@ -82,6 +86,15 @@ export default function InvestLedger() {
           { key: 'records', label: '盈亏记录', icon: <UnorderedListOutlined />, children: <PnlRecords /> },
           { key: 'platforms', label: '平台管理', icon: <AppstoreOutlined />, children: <PlatformManager /> },
           { key: 'rates', label: '汇率设置', icon: <SwapOutlined />, children: <RateSettings /> },
+          {
+            key: 'memo',
+            label: (
+              <Badge count={pendingMemoCount} size="small" offset={[6, -2]}>
+                <span><FileTextOutlined style={{ marginRight: 4 }} />备忘录</span>
+              </Badge>
+            ),
+            children: <InvestMemoPage />
+          },
         ]}
       />
     </div>

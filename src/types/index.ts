@@ -234,3 +234,19 @@ export interface FxRate {
   rate: number;            // 1 单位源币种 = rate CNY
   updatedAt: string;
 }
+
+/** 投资备忘录：凭记忆记录的模糊信息，待后续转为正式盈亏记录 */
+export type MemoStatus = 'pending' | 'done';
+
+export interface InvestMemo {
+  id: string;
+  platformId?: string;     // 关联平台（可选）
+  accountId?: string;      // 关联账户（可选）
+  title: string;           // 标题/简要描述
+  approxAmount?: string;   // 大概金额（纯文本，支持"1000左右"这种模糊输入）
+  approxDate?: string;     // 大概时间（纯文本，支持"去年年底"这种）
+  note?: string;           // 详细备注
+  status: MemoStatus;      // pending=待处理 / done=已处理
+  createdAt: string;
+  updatedAt: string;
+}

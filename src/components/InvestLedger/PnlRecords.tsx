@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Table, Button, Modal, Form, Input, InputNumber, Select, DatePicker, Popconfirm, Tag, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -26,13 +27,44 @@ const CURRENCY_SYMBOL: Record<string, string> = {
 };
 
 export default function PnlRecords() {
-  const { pnlRecords, platforms, accounts, addPnl, updatePnl, deletePnl, convertCurrency, convertToCNY, fxRates, displayCurrency } = useApp();
+  const { pnlRecords, platforms, accounts, addPnl, updatePnl, deletePnl, convertCurrency, convertToCNY, fxRates, displayCurrency, updateMemo } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
   const DC = displayCurrency;
   const dSym = CURRENCY_SYMBOL[DC] || '';
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [form] = Form.useForm<PnlFormValues>();
+
+  // 接收来自备忘录的跳转：自动打开补录弹窗并预填数据
+  useEffect(() => {
+    const memoState = (location.state as any)?.fromMemo;
+    if (memoState) {
+      const { accountId, platformId, approxAmount, approxDate, note, memoId } = (location.state as any);
+      // 找到对应账户
+      const targetAccount = accountId
+        ? accounts.find(a => a.id === accountId)
+        : platformId
+          ? accounts.find(a => a.platformId === platformId)
+          : accounts[0];
+      if (targetAccount) {
+        const pf = platforms.find(p => p.id === targetAccount.platformId);
+        setEditingId(null);
+        form.resetFields();
+        form.setFieldsValue({
+          accountId: targetAccount.id,
+          currency: targetAccount.currency || pf?.currency || 'CNY',
+          recordedAt: dayjs(),
+          pnl: 0,
+          note: note || '',
+        });
+        setModalOpen(true);
+      }
+      // 清除 state，避免刷新时重复弹窗
+      navigate(location.pathname, { replace: true, state: { memoId } });
+    }
+  }, [location.state]);
 
   // 表单中选中的账户
   const selectedAccountId = Form.useWatch('accountId', form);
@@ -104,6 +136,12 @@ export default function PnlRecords() {
       } else {
         await addPnl(data);
         message.success('添加成功');
+        // 如果来自备忘录跳转，自动标记备忘录为已处理
+        const memoId = (location.state as any)?.memoId;
+        if (memoId) {
+          try { await updateMemo(memoId, { status: 'done' }); } catch {}
+          navigate(location.pathname, { replace: true });
+        }
       }
       setModalOpen(false);
     } catch (e: any) {

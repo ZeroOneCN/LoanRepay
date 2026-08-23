@@ -541,6 +541,63 @@ app.delete('/api/invest/rates/:id', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ==================== 投资备忘录 ====================
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS invest_memos (
+    id TEXT PRIMARY KEY,
+    platformId TEXT,
+    accountId TEXT,
+    title TEXT NOT NULL,
+    approxAmount TEXT,
+    approxDate TEXT,
+    note TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    createdAt TEXT NOT NULL,
+    updatedAt TEXT NOT NULL
+  )
+`);
+
+app.get('/api/invest/memos', (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM invest_memos ORDER BY createdAt DESC').all();
+    res.json(rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/invest/memos', (req, res) => {
+  try {
+    const { id, platformId, accountId, title, approxAmount, approxDate, note, status, createdAt, updatedAt } = req.body;
+    db.prepare('INSERT INTO invest_memos (id, platformId, accountId, title, approxAmount, approxDate, note, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(id, platformId || null, accountId || null, title, approxAmount || null, approxDate || null, note || null, status || 'pending', createdAt, updatedAt);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put('/api/invest/memos/:id', (req, res) => {
+  try {
+    const fields = ['platformId', 'accountId', 'title', 'approxAmount', 'approxDate', 'note', 'status', 'updatedAt'];
+    const updates = [];
+    const values = [];
+    for (const f of fields) {
+      if (req.body[f] !== undefined) {
+        updates.push(`${f} = ?`);
+        values.push(req.body[f]);
+      }
+    }
+    if (updates.length === 0) return res.json({ success: true });
+    db.prepare(`UPDATE invest_memos SET ${updates.join(', ')} WHERE id = ?`).run(...values, req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/invest/memos/:id', (req, res) => {
+  try {
+    db.prepare('DELETE FROM invest_memos WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.listen(PORT, () => {
   console.log(`后端服务已启动: http://localhost:${PORT}`);
   console.log(`数据库文件: ${dbPath}`);
