@@ -5,7 +5,7 @@ export interface Debt {
   remainingAmount: number;
   creditLimit?: number;
   interestRate?: number;
-  dueDate: number;
+  dueDate?: number;
   lastDueDate?: number;
   repaymentType: RepaymentType;
   maturityDate?: string;

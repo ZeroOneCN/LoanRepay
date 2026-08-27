@@ -24,7 +24,7 @@ db.exec(`
     remainingAmount REAL NOT NULL,
     creditLimit REAL,
     interestRate REAL,
-    dueDate INTEGER NOT NULL,
+    dueDate INTEGER,
     lastDueDate INTEGER,
     repaymentType TEXT DEFAULT 'revolving',
     maturityDate TEXT,
@@ -51,6 +51,42 @@ addColumnIfNotExists('debts', 'lastDueDate', 'INTEGER');
 addColumnIfNotExists('debts', 'creditLimit', 'REAL');
 addColumnIfNotExists('debts', 'interestRate', 'REAL');
 addColumnIfNotExists('debts', 'note', 'TEXT');
+
+// 迁移：debts.dueDate 由 NOT NULL 改为可空（灵活模式不填出账日）
+// SQLite 无法直接去掉 NOT NULL，需重建表
+(function migrateDebtsDueDate() {
+  try {
+    const cols = db.pragma('table_info(debts)');
+    const dueDateCol = cols.find(c => c.name === 'dueDate');
+    if (dueDateCol && dueDateCol.notnull === 1) {
+      console.log('[migrate] debts.dueDate NOT NULL → 可空，开始重建表...');
+      db.exec('BEGIN TRANSACTION');
+      db.exec(`CREATE TABLE debts_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        remainingAmount REAL NOT NULL,
+        creditLimit REAL,
+        interestRate REAL,
+        dueDate INTEGER,
+        lastDueDate INTEGER,
+        repaymentType TEXT DEFAULT 'revolving',
+        maturityDate TEXT,
+        createdAt TEXT NOT NULL,
+        note TEXT
+      )`);
+      db.exec(`INSERT INTO debts_new (id, name, type, remainingAmount, creditLimit, interestRate, dueDate, lastDueDate, repaymentType, maturityDate, createdAt, note)
+               SELECT id, name, type, remainingAmount, creditLimit, interestRate, dueDate, lastDueDate, repaymentType, maturityDate, createdAt, note FROM debts`);
+      db.exec('DROP TABLE debts');
+      db.exec('ALTER TABLE debts_new RENAME TO debts');
+      db.exec('COMMIT');
+      console.log('[migrate] debts.dueDate 已迁移为可空');
+    }
+  } catch (e) {
+    db.exec('ROLLBACK');
+    console.warn('[migrate] debts.dueDate 迁移失败:', e.message);
+  }
+})();
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS assets (
@@ -107,7 +143,7 @@ app.post('/api/debts', (req, res) => {
     db.prepare(`
       INSERT INTO debts (id, name, type, remainingAmount, creditLimit, interestRate, dueDate, lastDueDate, repaymentType, maturityDate, createdAt, note)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name, type, remainingAmount, creditLimit ?? null, interestRate ?? null, dueDate, lastDueDate ?? null, repaymentType || 'revolving', maturityDate ?? null, createdAt, note || null);
+    `).run(id, name, type, remainingAmount, creditLimit ?? null, interestRate ?? null, dueDate ?? null, lastDueDate ?? null, repaymentType || 'revolving', maturityDate ?? null, createdAt, note || null);
     res.json({ success: true });
   } catch (err) {
     console.error('[POST /api/debts] 错误:', err.message);
