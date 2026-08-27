@@ -214,31 +214,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setDebts(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     if (!recordTx) return;
-    // 交易记录辅助，失败不阻断
+    // 编辑债务不自动生成还款交易记录，只记录非金额字段的调整
     try {
-      if (oldDebt && updates.remainingAmount !== undefined && updates.remainingAmount !== oldDebt.remainingAmount) {
-        const diff = updates.remainingAmount - oldDebt.remainingAmount;
-        const isRepay = diff < 0;
-        const changeAmount = Math.abs(diff);
-        let interestPortion = 0;
-        let principalPortion = changeAmount;
-        if (isRepay && oldDebt.interestRate) {
-          const monthlyInterest = calculateMonthlyInterest(oldDebt.remainingAmount, oldDebt.interestRate);
-          interestPortion = Math.min(changeAmount, monthlyInterest);
-          principalPortion = changeAmount - interestPortion;
-        }
-        await recordTransaction({
-          debt_id: id,
-          debt_name: updates.name || oldDebt.name,
-          type: isRepay ? 'repay' : 'adjust',
-          amount: changeAmount,
-          interest_portion: interestPortion,
-          principal_portion: principalPortion,
-          remaining_after: updates.remainingAmount,
-          interest_rate: updates.interestRate ?? oldDebt.interestRate,
-          note: isRepay ? '还款扣减' : '手动调整'
-        });
-      } else if (oldDebt && (updates.interestRate !== undefined || updates.creditLimit !== undefined || updates.name !== undefined)) {
+      if (oldDebt && (updates.interestRate !== undefined || updates.creditLimit !== undefined || updates.name !== undefined || updates.type !== undefined || updates.repaymentType !== undefined)) {
         await recordTransaction({
           debt_id: id,
           debt_name: updates.name || oldDebt.name,
