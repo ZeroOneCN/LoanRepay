@@ -139,14 +139,12 @@ app.get('/api/debts', (req, res) => {
 app.post('/api/debts', (req, res) => {
   try {
     const { id, name, type, remainingAmount, creditLimit, interestRate, dueDate, lastDueDate, repaymentType, maturityDate, createdAt, note } = req.body;
-    console.log('[POST /api/debts] 收到数据:', JSON.stringify(req.body));
     db.prepare(`
       INSERT INTO debts (id, name, type, remainingAmount, creditLimit, interestRate, dueDate, lastDueDate, repaymentType, maturityDate, createdAt, note)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, name, type, remainingAmount, creditLimit ?? null, interestRate ?? null, dueDate ?? null, lastDueDate ?? null, repaymentType || 'revolving', maturityDate ?? null, createdAt, note || null);
     res.json({ success: true });
   } catch (err) {
-    console.error('[POST /api/debts] 错误:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
