@@ -5,7 +5,9 @@ const API_BASE = '/api';
 async function fetchApi(url: string, options?: RequestInit): Promise<any> {
   const response = await fetch(url, options);
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    let serverMsg = '';
+    try { const body = await response.json(); serverMsg = body?.error || ''; } catch {}
+    throw new Error(serverMsg || `API Error: ${response.status}`);
   }
   return response.json();
 }
