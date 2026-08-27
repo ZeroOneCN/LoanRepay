@@ -655,7 +655,14 @@ export default function DebtManager() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="repaymentType" label="还款方式" rules={[{ required: true, message: '请选择还款方式' }]}>
-                <Select>
+                <Select onChange={(val) => {
+                  if (val === 'flexible') {
+                    form.setFieldsValue({ dueDate: undefined, lastDueDate: undefined });
+                  }
+                  if (val !== 'interest_only') {
+                    form.setFieldsValue({ maturityDate: undefined });
+                  }
+                }}>
                   <Option value="revolving">循环贷</Option>
                   <Option value="interest_only">先息后本</Option>
                   <Option value="flexible">灵活模式</Option>
