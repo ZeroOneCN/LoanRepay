@@ -401,6 +401,7 @@ export default function DebtManager() {
     {
       title: '还款日',
       key: 'dueDates',
+      width: 90,
       render: (_: any, record: any) => {
         const parts: string[] = [];
         if (record.dueDate) parts.push(`出账${record.dueDate}日`);
