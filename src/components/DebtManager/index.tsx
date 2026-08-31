@@ -375,7 +375,7 @@ export default function DebtManager() {
     {
       title: '额度使用',
       key: 'creditInfo',
-      width: 130,
+      width: 100,
       ellipsis: true,
       render: (_: any, record: any) => {
         if (!record.creditLimit) return <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>;
@@ -412,7 +412,7 @@ export default function DebtManager() {
       title: '备注',
       dataIndex: 'note',
       key: 'note',
-      width: 160,
+      width: 200,
       ellipsis: true,
       render: (val: string) => val ? <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{val}</span> : <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>
     },
