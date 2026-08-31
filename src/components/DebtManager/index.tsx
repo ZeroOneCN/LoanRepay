@@ -349,6 +349,7 @@ export default function DebtManager() {
       title: '债务名称',
       dataIndex: 'name',
       key: 'name',
+      width: 200,
       ellipsis: true,
       render: (text: string, record: any) => (
         <div>
@@ -413,7 +414,6 @@ export default function DebtManager() {
       title: '备注',
       dataIndex: 'note',
       key: 'note',
-      width: 200,
       ellipsis: true,
       render: (val: string) => val ? <span style={{ fontSize: FONT.tableCell, color: COLORS.textSecondary }}>{val}</span> : <span style={{ color: COLORS.textTertiary, fontSize: FONT.tableCell }}>-</span>
     },
