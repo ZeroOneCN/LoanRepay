@@ -5,11 +5,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
-    port: 3010,
+    port: 9008,
     historyApiFallback: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:9508',
         changeOrigin: true
       }
     }
